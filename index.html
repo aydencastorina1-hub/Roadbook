@@ -1493,6 +1493,22 @@ textarea{min-height:84px;resize:vertical;font-size:14px;line-height:1.45}
 .whorow .t span{display:block;font-size:10px;color:var(--muted);margin-top:3px;line-height:1.45}
 .whorow .n{font-family:var(--cond);font-size:21px;font-weight:700;color:var(--amber)}
 
+/* brightness slider — the generic input rule deliberately does not cover
+   range, so it needs its own track/thumb or it inherits nothing */
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:34px;
+  background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;
+  background:linear-gradient(90deg,#1b232b,var(--amber));border:1px solid var(--line2)}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;
+  background:linear-gradient(90deg,#1b232b,var(--amber));border:1px solid var(--line2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+  width:26px;height:26px;border-radius:50%;margin-top:-11px;background:var(--amber);
+  border:2px solid #ffe3a3;box-shadow:0 2px 8px rgba(0,0,0,.6)}
+input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;
+  background:var(--amber);border:2px solid #ffe3a3;box-shadow:0 2px 8px rgba(0,0,0,.6)}
+input[type=range]:disabled::-webkit-slider-thumb{background:var(--muted);border-color:var(--line2)}
+input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-color:var(--line2)}
+
 /* the running team total, pinned in the sheet header */
 .hpts{display:flex;align-items:baseline;gap:4px;padding:3px 9px;border-radius:3px;
   background:var(--amber-g);border:1px solid var(--amber-d)}
@@ -1846,6 +1862,12 @@ textarea{min-height:84px;resize:vertical;font-size:14px;line-height:1.45}
       <div class="in">
         <label class="chk"><input type="checkbox" id="fDark" checked>
           Night map (dimmer basemap &mdash; easier at speed, kinder on the battery)</label>
+        <label class="f" id="dimWrap" style="margin-top:4px">
+          <span>Map brightness <em id="dimVal" style="font-style:normal;color:var(--amber)">60%</em></span>
+          <input type="range" id="fDim" min="35" max="100" step="5" value="60">
+        </label>
+        <p class="hint">Slide it while you are actually looking at the map. 100% turns the
+          dim off entirely and gives you the daytime map.</p>
         <label class="chk"><input type="checkbox" id="fVoice" checked>
           Spoken turn-by-turn directions</label>
       </div>
@@ -2056,7 +2078,8 @@ const BASEMAPS = CARTO_KEY ? {
   /* Night is a dim, NOT an inversion. invert()+hue-rotate is the usual
      fake dark basemap and it looks fine inland, but on this coastline it
      swaps land and water — the Sound comes out chocolate brown. */
-  dark:  { id:'es', retina:false, filter:'brightness(.3) saturate(1.45) contrast(1.15)',
+  /* filter is built at paint time from PREF.dim — see nightFilter(). */
+  dark:  { id:'es', retina:false, filter:null,
            layers:[ { id:'b', url:ESRI_STREET } ] },
   light: { id:'es', retina:false, filter:'saturate(1.04)',
            layers:[ { id:'b', url:ESRI_STREET } ] }
@@ -2091,7 +2114,14 @@ function tileUrl(role,z,x,y){
 const ME_KEY    = 'roadbook.me.v2';
 const ADMIN_KEY = 'roadbook.admin.v2';
 const PREF_KEY  = 'roadbook.pref.v2';
-const PREF_DEF  = { dark:true, voice:true, filter:'all', sort:'place' };
+/* `dim` is how far night mode pulls the basemap down, 0.35 (very dark)
+   to 1 (no dim at all). It is a setting rather than a constant because
+   "too dark" depends on the phone, its own brightness slider and
+   whether the car's interior lights are on — none of which the app can
+   see. 0.6 is the new default; it was 0.3, which read as almost black on
+   a phone that was not already at full brightness. Kept on the slider's
+   own 5% step so the number under the thumb is the number stored. */
+const PREF_DEF  = { dark:true, dim:0.60, voice:true, filter:'all', sort:'place' };
 
 let ME = null;                 // 'Will' | … | null  (null = show the picker)
 let ADMIN = null;              // the admin code, once verified
@@ -2595,17 +2625,42 @@ function initMap(){
   map.on('click', onMapClick);
   map.on('moveend zoomend', () => { if (!$('#gearbox').hidden) estimateCache(); });
 }
+/* Night is a dim, NOT an inversion — invert()+hue-rotate is the usual
+   fake dark basemap and it looks fine inland, but on this coastline it
+   swaps land and water and the Sound comes out chocolate brown.
+
+   Saturation and contrast are nudged UP as the map gets darker, and
+   back towards neutral as it lightens: a heavy dim washes the colour
+   out of the roads, so without that compensation the darkest setting is
+   not just dark, it is grey. */
+function nightFilter(){
+  const d = clamp(Number(PREF.dim) || PREF_DEF.dim, 0.35, 1);
+  if (d >= 0.995) return 'saturate(1.04)';
+  const t = (1 - d) / 0.65;                       // 0 at full bright, 1 at darkest
+  const sat = (1 + 0.45 * t).toFixed(2);
+  const con = (1 + 0.15 * t).toFixed(2);
+  return 'brightness(' + d.toFixed(2) + ') saturate(' + sat + ') contrast(' + con + ')';
+}
 function applyDark(){
   if (!tileLayers.length) return;
   const bm = basemap();
   const p = document.querySelector('.leaflet-tile-pane');
-  if (p) p.style.filter = bm.filter;
-  const bg = PREF.dark ? '#0d1420' : '#e8e6dd';
+  if (p) p.style.filter = bm.filter || nightFilter();
+  // The backdrop behind a missing tile has to track the dim too, or a
+  // hole in the map is a bright navy rectangle on a dark screen.
+  const bg = PREF.dark ? mixHex('#0b0f16', '#31435c', 1 - clamp(Number(PREF.dim) || 1, 0.35, 1)) : '#e8e6dd';
   const mp = $('#map'); if (mp) mp.style.background = bg;
   const lc = document.querySelector('.leaflet-container'); if (lc) lc.style.background = bg;
   if (bm.layers.length !== tileLayers.length) return;
   bm.layers.forEach((l, i) => { if (tileLayers[i]._url !== l.url) tileLayers[i].setUrl(l.url); });
   tileLayers.forEach(t => t.redraw());
+}
+
+/* Linear blend of two #rrggbb colours; t=0 is a, t=1 is b. */
+function mixHex(a, b, t){
+  const p = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+  const A = p(a), B = p(b);
+  return '#' + A.map((v,i) => Math.round(v + (B[i]-v)*clamp(t,0,1)).toString(16).padStart(2,'0')).join('');
 }
 
 /* ------------------------------------------------------------ geocoding */
@@ -5005,7 +5060,24 @@ function wire(){
 
   const dk = $('#fDark');
   dk.checked = !!PREF.dark;
-  dk.addEventListener('change', () => { PREF.dark = dk.checked; savePref(); applyDark(); });
+  dk.addEventListener('change', () => { PREF.dark = dk.checked; savePref(); applyDark(); paintDim(); });
+  const dim = $('#fDim'), dimVal = $('#dimVal'), dimWrap = $('#dimWrap');
+  const paintDim = () => {
+    dim.value = String(Math.round((PREF.dim != null ? PREF.dim : PREF_DEF.dim) * 100));
+    dimVal.textContent = dim.value + '%';
+    dimWrap.style.opacity = PREF.dark ? '1' : '.4';
+    dim.disabled = !PREF.dark;
+  };
+  paintDim();
+  // 'input', not 'change': the whole point is watching the map change
+  // under your thumb as you drag.
+  dim.addEventListener('input', () => {
+    PREF.dim = (+dim.value) / 100;
+    dimVal.textContent = dim.value + '%';
+    applyDark();
+  });
+  dim.addEventListener('change', savePref);
+
   const vc = $('#fVoice');
   vc.checked = !!PREF.voice;
   vc.addEventListener('change', () => {
