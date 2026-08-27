@@ -22,7 +22,7 @@
       "continue": true
     },
     { "src": "/api/locations/([^/]+)/challenges", "dest": "/api/locations?id=$1&sub=challenges" },
-    { "src": "/api/challenges/([^/]+)/(checkin|complete|skip)", "dest": "/api/challenges?id=$1&action=$2" },
+    { "src": "/api/challenges/([^/]+)/(checkin|complete|skip|locate|select)", "dest": "/api/challenges?id=$1&action=$2" },
     { "handle": "filesystem" },
     { "src": "/api/(.*)", "status": 404, "dest": "/api/team?notfound=1" },
     { "src": "/((?!api/)(?!.*\\.).*)", "dest": "/index.html" }

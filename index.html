@@ -1611,6 +1611,30 @@ input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-colo
   font-variant-numeric:tabular-nums}
 .hpts span{font-size:7.5px;letter-spacing:1.2px;color:var(--muted)}
 
+/* preview banner: sits directly on top of the tab bar so it is
+   impossible to be in preview and not know it */
+#previewBar{position:fixed;z-index:625;left:0;right:0;bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  display:flex;align-items:center;gap:10px;padding:8px 11px;
+  background:linear-gradient(180deg,#3a2a06,#241a05);border-top:1px solid var(--amber-d);
+  box-shadow:0 -4px 18px rgba(0,0,0,.5)}
+#previewBar span{flex:1;min-width:0;font-size:10.5px;line-height:1.4;color:#ffd98a}
+#previewBar b{color:var(--amber);letter-spacing:1.4px}
+#previewBar .btn{flex:0 0 auto;padding:7px 11px;min-height:38px}
+body.previewing #sheet,body.previewing #tabbar{transition:none}
+@media (min-width:880px){#previewBar{left:auto;width:412px}}
+
+/* "no location yet" is a state the player has to act on, so it reads as
+   a task rather than an error */
+.noloc{display:inline-flex;align-items:center;gap:5px;font-size:9px;letter-spacing:1.1px;
+  text-transform:uppercase;padding:3px 7px;border-radius:2px;color:var(--cyan);
+  border:1px dashed #2b5a68;background:rgba(65,201,232,.07);white-space:nowrap}
+.chc.unlocated{border-left-color:var(--cyan)}
+.chc.notsel{opacity:.55;border-left-color:var(--muted)}
+.chc.notsel .nm{text-decoration:line-through}
+.lpitem{display:flex;align-items:center;gap:9px}
+.lpitem .n{flex:1;min-width:0}
+.lpitem .c{flex:0 0 auto;font-size:10px;color:var(--amber)}
+
 /* ---------- sync chip ---------- */
 .chip.sync{cursor:pointer}
 .chip.sync.q .dot{background:var(--amber);box-shadow:0 0 7px var(--amber)}
@@ -1745,8 +1769,15 @@ input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-colo
         <div class="bar"><i id="pjBar"></i></div>
       </div>
 
+      <div id="decide" class="sec" style="margin-bottom:12px">
+        <h3>Decisions <em id="decLbl">0 of 0</em></h3>
+        <div class="in">
+          <div class="prog" style="margin-top:0"><i id="decBar"></i></div>
+          <p class="hint" id="decHint"></p>
+        </div>
+      </div>
       <div class="row" style="margin-bottom:12px">
-        <button class="btn pri tall" id="btnOpt">&#9889; Optimize team route</button>
+        <button class="btn pri tall" id="btnOpt">&#9889; Make team route</button>
       </div>
       <div class="prog" id="optProg" style="display:none"><i></i></div>
 
@@ -1765,6 +1796,11 @@ input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-colo
 
   </div>
 </section>
+
+<div id="previewBar" hidden>
+  <span><b>PREVIEW</b> &mdash; this is what a player sees. Nothing here can be changed.</span>
+  <button class="btn sm" id="pvExit">Exit preview</button>
+</div>
 
 <nav id="tabbar" aria-label="Sections">
   <button data-p="map" aria-label="Map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.5 3.5 6v14.5L9 18l6 2.5 5.5-2.5V3.5L15 6 9 3.5Z"/><path d="M9 3.5V18M15 6v14.5"/></svg><em>Map</em></button>
@@ -1791,6 +1827,7 @@ input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-colo
   <div class="ahead">
     <b>ADMIN</b><em id="admWho"></em>
     <span class="sp"></span>
+    <button class="btn sm" id="admPreview">Preview as player</button>
     <button class="iconbtn" id="admExit" aria-label="Leave admin">&times;</button>
   </div>
   <div class="abody">
@@ -1843,36 +1880,49 @@ input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-colo
         </div>
       </div>
 
-      <!-- ---- location builder ---- -->
+      <!-- ---- challenge builder (the primary admin action) ----
+           Location is deliberately NOT part of this form. The admin
+           writes the list of things to do; where each one happens is
+           usually worked out later, often by whoever is standing there.
+           Making a pin compulsory here meant inventing one. -->
       <div class="sec">
-        <h3>Add a location <em id="locFormMode">new</em></h3>
+        <h3>Add a challenge <em id="chalFormMode">new</em></h3>
         <div class="in">
           <label class="f"><span>Name</span>
-            <input type="text" id="lName" placeholder="Bayville Bridge" autocapitalize="sentences" enterkeyhint="next"></label>
-          <label class="f"><span>Address &mdash; search, or drop a pin</span>
-            <input type="search" id="lQ" placeholder="Address, place, or intersection" autocomplete="off" enterkeyhint="search"></label>
+            <input type="text" id="aName" placeholder="Photo with the bridge sign"
+                   autocapitalize="sentences" enterkeyhint="next"></label>
           <div class="row">
-            <button class="btn" id="lGo">Search</button>
-            <button class="btn" id="lPin">Map pin</button>
-            <button class="btn" id="lMe">Use GPS</button>
+            <label class="f"><span>Points</span>
+              <input type="number" id="aPts2" value="10" min="0" step="1" inputmode="numeric" enterkeyhint="next"></label>
+            <label class="f"><span>People needed</span>
+              <select id="aNeed"></select></label>
           </div>
-          <div class="srlist" id="lRes" style="display:none"></div>
-          <div class="picked none" id="lPicked" style="margin:10px 0"><span>No location picked</span></div>
-          <label class="f"><span>Description (optional)</span>
-            <input type="text" id="lDesc" placeholder="Park in the marina lot, walk to the sign" enterkeyhint="done"></label>
-          <div class="row">
-            <button class="btn pri wide tall" id="lSave">Add location</button>
+          <label class="f"><span>Description</span>
+            <textarea id="aDesc" placeholder="What actually has to happen, and what counts as proof"></textarea></label>
+          <div class="picked none" id="aLoc" style="margin-bottom:10px"><span>No location &mdash; that's fine</span></div>
+          <div class="row" style="margin-bottom:10px">
+            <button class="btn ghost sm" id="aSetLoc">Set location (optional)</button>
+            <button class="btn ghost sm" id="aClrLoc" hidden>Clear location</button>
           </div>
-          <button class="btn ghost wide sm" id="lCancel" hidden style="margin-top:8px">Cancel edit</button>
+          <button class="btn pri wide tall" id="aSave">Add challenge</button>
+          <button class="btn ghost wide sm" id="aCancel" hidden style="margin-top:8px">Cancel edit</button>
+          <p class="hint">Leave the location blank if you don't know it yet &mdash; any player can pin it
+            later from the Challenges tab, and it appears on everyone's map straight away.</p>
         </div>
       </div>
 
       <!-- ---- live overview ---- -->
       <div class="sec">
-        <h3>Locations &amp; challenges <em id="admCount">0</em></h3>
+        <h3>The board <em id="admCount">0</em></h3>
         <div class="in" style="padding:10px 10px 2px">
+          <div class="stats c2" style="margin-bottom:10px">
+            <div class="stat amber"><b id="aBoardPts">0</b><span>Points on the board</span></div>
+            <div class="stat"><b id="aRoutePts">0</b><span>Points on the route</span></div>
+            <div class="stat green"><b id="aScored">0</b><span>Scored so far</span></div>
+            <div class="stat"><b id="aDecided">0</b><span>Decided</span></div>
+          </div>
           <div class="stats c4" style="margin-bottom:10px">
-            <div class="stat amber"><b id="aPts">0</b><span>Team pts</span></div>
+            <div class="stat"><b id="aLocated">0</b><span>Located</span></div>
             <div class="stat"><b id="aConf">0</b><span>Confirmed</span></div>
             <div class="stat green"><b id="aDone">0</b><span>Complete</span></div>
             <div class="stat red"><b id="aSkip">0</b><span>Skipped</span></div>
@@ -1896,28 +1946,39 @@ input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-colo
   </div>
 </div>
 
-<!-- ==================== CHALLENGE EDITOR (admin, modal) ==================== -->
-<div id="chEdit" hidden style="position:fixed;inset:0;z-index:935;display:grid;place-items:center;padding:16px;background:rgba(4,5,7,.86)">
-  <div style="width:100%;max-width:400px;max-height:92vh;overflow-y:auto;background:var(--panel);
-              border:1px solid var(--line2);border-top:2px solid var(--amber);border-radius:9px;padding:15px">
-    <h2 style="font-family:var(--cond);font-size:18px;letter-spacing:1.4px;margin:0 0 3px;color:var(--txt)" id="ceTitle">New challenge</h2>
-    <p style="font-size:10.5px;color:var(--muted);margin:0 0 14px" id="ceWhere"></p>
-    <label class="f"><span>Name</span>
-      <input type="text" id="ceName" placeholder="Photo with the bridge sign" autocapitalize="sentences" enterkeyhint="next"></label>
-    <div class="row">
-      <label class="f"><span>Points</span>
-        <input type="number" id="cePts" value="10" min="0" step="1" inputmode="numeric" enterkeyhint="next"></label>
-      <label class="f"><span>People needed</span>
-        <!-- filled from PLAYERS at boot, so the roster is the only
-             place a new name has to be added -->
-        <select id="ceNeed"></select></label>
+<!-- ==================== WHERE IS THIS CHALLENGE? ====================
+     Any player can answer this, not just the admin: the person who
+     works out where a challenge happens is usually the one standing in
+     the car park, not the one who wrote the list. -->
+<div id="locPick" hidden style="position:fixed;inset:0;z-index:936;display:grid;place-items:center;padding:14px;background:rgba(4,5,7,.88)">
+  <div style="width:100%;max-width:420px;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+              background:var(--panel);border:1px solid var(--line2);border-top:2px solid var(--amber);
+              border-radius:9px;padding:15px">
+    <h2 style="font-family:var(--cond);font-size:18px;letter-spacing:1.4px;margin:0 0 3px;color:var(--txt)">Where is this?</h2>
+    <p style="font-size:12px;color:var(--amber);margin:0 0 13px" id="lpName"></p>
+
+    <div id="lpExistingWrap">
+      <h3 style="margin:0 0 7px;font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted)">Add to a pin that already exists</h3>
+      <div class="srlist" id="lpExisting" style="margin-top:0;margin-bottom:14px"></div>
     </div>
-    <label class="f"><span>Description</span>
-      <textarea id="ceDesc" placeholder="What actually has to happen, and what counts as proof"></textarea></label>
+
+    <h3 style="margin:0 0 7px;font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted)">Or drop a new pin</h3>
+    <label class="f"><span>Name this place</span>
+      <input type="text" id="lpPlace" placeholder="e.g. Bayville Bridge" autocapitalize="words" enterkeyhint="next"></label>
+    <label class="f"><span>Address &mdash; search</span>
+      <input type="search" id="lQ" placeholder="Address, place, or intersection" autocomplete="off" enterkeyhint="search"></label>
     <div class="row">
-      <button class="btn ghost" id="ceCancel">Cancel</button>
-      <button class="btn pri tall" id="ceSave">Save</button>
+      <button class="btn" id="lGo">Search</button>
+      <button class="btn" id="lPin">Map pin</button>
+      <button class="btn" id="lMe">Use GPS</button>
     </div>
+    <div class="srlist" id="lRes" style="display:none"></div>
+    <div class="picked none" id="lPicked" style="margin:10px 0"><span>No point picked</span></div>
+    <div class="row">
+      <button class="btn ghost" id="lpCancel">Cancel</button>
+      <button class="btn pri tall" id="lpSave">Set location</button>
+    </div>
+    <button class="btn ghost wide sm" id="lpClear" style="margin-top:8px" hidden>Remove this pin</button>
   </div>
 </div>
 
@@ -1963,6 +2024,13 @@ input[type=range]:disabled::-moz-range-thumb{background:var(--muted);border-colo
         </label>
         <p class="hint">Slide it while you are actually looking at the map. 100% turns the
           dim off entirely and gives you the daytime map.</p>
+        <label class="f" style="margin-top:10px"><span>Map detail</span>
+          <select id="fDetail">
+            <option value="balanced">Balanced &mdash; sharp, normal download size</option>
+            <option value="sharp">Sharp &mdash; sharpest, 16&times; the offline storage</option>
+          </select>
+        </label>
+        <p class="hint" id="detailHint"></p>
         <label class="chk"><input type="checkbox" id="fVoice" checked>
           Spoken turn-by-turn directions</label>
       </div>
@@ -2145,7 +2213,6 @@ const CENTER = [40.8560, -73.5680];
 const ZOOM   = 12;
 const VIEWBOX = '-73.78,40.99,-73.36,40.68';       // Nominatim bias box
 const OSRM = 'https://router.project-osrm.org';
-const MAX_PRECACHE = 3000;
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 /* Poll cadence. 15s while the hunt is live, 30s outside it — the shared
@@ -2184,10 +2251,69 @@ const TILE_ATTR = CARTO_KEY
     + '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
   : 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; '
     + '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
-const TILE_MAXNATIVE = CARTO_KEY ? 20 : 19;   // measured, not guessed
-const TILE_MAXZOOM   = 20;
+/* ------------------------------------------------- retina sharpness --
+   THE MAP USED TO BE BLURRY AT EVERY ZOOM ON A PHONE, and this is why.
+
+   Esri's World_Street_Map serves 256x256 JPEGs and has NO @2x variant —
+   measured, not assumed: z20 and z21 come back as the same 2,521-byte
+   "Map data not yet available" placeholder (identical md5), and every
+   real tile from z14 to z19 is 256x256. So the usual fix — an {r}
+   placeholder in the URL plus `detectRetina: true` — has nothing to
+   fetch here. It would change the request to a file that does not
+   exist.
+
+   What DOES work, and what Leaflet's detectRetina actually does under
+   the hood, is geometric: halve the tile box and fetch one zoom level
+   deeper. A 256px image drawn into a 128 CSS px box is twice the pixel
+   density, from exactly the same tile service. Measured on a DPR-3
+   viewport: 0.33 image pixels per device pixel before, 0.67 after.
+
+   Leaflet's own detectRetina is NOT used, because it adjusts maxZoom
+   but leaves maxNativeZoom alone — which would push the URL zoom to 20
+   and paper the screen with that grey placeholder, the exact bug the
+   old TILE_MAXNATIVE comment warns about. The offset is applied here
+   instead so the two limits stay in step:
+
+       url zoom = min(mapZoom, TILE_MAXNATIVE) + TILE_ZOFF   <= 19
+
+   And the map is capped at TILE_MAXNATIVE rather than one level above
+   it: past that there is no more data, and "fully zoomed in" should be
+   the sharpest view there is, not a 2x upscale of it. */
+const DPR_NOW = (typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1);
+const NATIVE_URL_MAX = CARTO_KEY ? 20 : 19;   // deepest zoom with real data
+
+/* Each extra offset step is 4x the tiles for the same ground, so it is
+   capped at 1 by default: measured on a DPR-3 viewport, offset 1 takes
+   a screenful from 8 tiles to 32, and offset 2 to 105. "Sharp" gives up
+   that budget on purpose and is opt-in from Settings — at offset 2 an
+   offline download of the same area costs SIXTEEN times the storage,
+   which would quietly break the one feature this app exists for. */
+function autoZoff(){ return Math.max(0, Math.min(1, Math.round(Math.log2(DPR_NOW)))); }
+function activeZoff(){
+  try { const m = /[?&]zoff=(\d)/.exec(location.search); if (m) return +m[1]; } catch(e){}
+  if (PREF && PREF.detail === 'sharp')
+    return Math.max(0, Math.min(2, Math.round(Math.log2(DPR_NOW)) + 1));
+  return autoZoff();
+}
+
+/* Recomputed whenever the detail setting changes; the tile layers are
+   rebuilt from these, because tileSize and zoomOffset cannot be changed
+   on a live Leaflet layer. */
+let TILE_ZOFF, TILE_PX, TILE_MAXNATIVE, TILE_MAXZOOM, MAX_PRECACHE_TILES;
+function computeTileGeometry(){
+  TILE_ZOFF = activeZoff();
+  TILE_PX = 256 >> TILE_ZOFF;                 // CSS box for a 256px image
+  TILE_MAXNATIVE = NATIVE_URL_MAX - TILE_ZOFF;
+  // One level of magnification past the crisp limit, so pinching further
+  // still does something. Past that there is genuinely no more data.
+  TILE_MAXZOOM = TILE_MAXNATIVE + 1;
+  MAX_PRECACHE_TILES = 3000 * (1 << (2 * TILE_ZOFF));
+}
 const TILE_KB = 15;
-const TILESET_VER = 'esri-street-1';
+/* Bumped for the retina change: the old cache is full of tiles at the
+   zoom levels the app no longer asks for, so it would sit there taking
+   up space while every visible tile was re-fetched anyway. */
+const TILESET_VER = 'esri-street-2-retina';
 function basemap(){ return PREF.dark ? BASEMAPS.dark : BASEMAPS.light; }
 function tileRoles(){ return basemap().layers.map(l => l.id); }
 function layerFor(role){ return basemap().layers.filter(l => l.id === role)[0]; }
@@ -2216,7 +2342,7 @@ const PREF_KEY  = 'roadbook.pref.v2';
    see. 0.6 is the new default; it was 0.3, which read as almost black on
    a phone that was not already at full brightness. Kept on the slider's
    own 5% step so the number under the thumb is the number stored. */
-const PREF_DEF  = { dark:true, dim:0.60, voice:true, filter:'all', sort:'place' };
+const PREF_DEF  = { dark:true, dim:0.60, detail:'balanced', voice:true, filter:'all', sort:'place' };
 
 let ME = null;                 // 'Will' | … | null  (null = show the picker)
 let ADMIN = null;              // the admin code, once verified
@@ -2362,7 +2488,7 @@ let syncErr = null;
 
 const EMPTY = {
   event: { date:'', startTime:'19:00', endTime:'00:00', start:null },
-  locations: [], challenges: [], checkins:{}, done:{}, skips:{}, route:null,
+  locations: [], challenges: [], checkins:{}, done:{}, skips:{}, notSel:{}, route:null,
   players: PLAYERS, at: 0
 };
 
@@ -2374,6 +2500,7 @@ function cloneState(s){
     checkins: Object.assign({}, s.checkins),
     done: Object.assign({}, s.done),
     skips: Object.assign({}, s.skips),
+    notSel: Object.assign({}, s.notSel || {}),
     route: s.route ? Object.assign({}, s.route) : null,
     players: s.players || PLAYERS,
     at: s.at || 0
@@ -2395,6 +2522,33 @@ function recompute(){
     else if (op.kind === 'skip'){
       if (op.on) s.skips[op.cid] = { by: op.player, at: op.at };
       else delete s.skips[op.cid];
+    }
+    else if (op.kind === 'select'){
+      // `on` means NOT selected — the team decided against it.
+      if (op.on) s.notSel[op.cid] = { by: op.player, at: op.at };
+      else delete s.notSel[op.cid];
+    }
+    else if (op.kind === 'locate'){
+      /* Optimistic pin. A brand-new pin has no server id yet, so it gets
+         a provisional one and a provisional location record; the next
+         poll replaces both with the real thing. Without this, dropping a
+         pin in a dead zone would look like it did nothing. */
+      const i = s.challenges.findIndex(c => c.id === op.cid);
+      if (i >= 0){
+        let locId = op.locId || null;
+        if (!locId && op.loc){
+          locId = op.tmpLocId;
+          if (!s.locations.some(l => l.id === locId)){
+            s.locations = s.locations.concat([{
+              id: locId, name: op.loc.name, address: op.loc.address || '', desc: '',
+              lat: op.loc.lat, lng: op.loc.lng, by: op.player, at: op.at, pending: true
+            }]);
+          }
+        }
+        s.challenges = s.challenges.slice();
+        s.challenges[i] = Object.assign({}, s.challenges[i], { locId });
+        if (locId) delete s.notSel[op.cid];
+      }
     }
   }
   T = s;
@@ -2460,18 +2614,30 @@ async function apiJson(res){
 }
 
 /* ---- the queue ---- */
-function enqueue(kind, cid, on){
+function enqueue(kind, cid, on, extra){
   if (!ME) return;
   // One pending write per (kind, challenge, player): tapping "I'm in"
   // then "back out" while offline must send the final answer, not both.
-  Q = Q.filter(o => !(o.kind === kind && o.cid === cid && o.player === ME));
-  Q.push({ id: uid(), kind, cid, player: ME, on: !!on, at: Date.now() });
+  // `locate` collapses on (kind, challenge) alone - a pin has one
+  // answer, whoever set it.
+  Q = Q.filter(o => kind === 'locate'
+    ? !(o.kind === kind && o.cid === cid)
+    : !(o.kind === kind && o.cid === cid && o.player === ME));
+  Q.push(Object.assign({ id: uid(), kind, cid, player: ME, on: !!on, at: Date.now() }, extra || {}));
   recompute();
   persistQueue();
   renderAll();
   flush();
 }
-const OP_PATH = { checkin:'checkin', complete:'complete', skip:'skip' };
+const OP_PATH = { checkin:'checkin', complete:'complete', skip:'skip', select:'select', locate:'locate' };
+/* Each op knows how to describe itself to the server. Locate is the odd
+   one out: it carries either an existing pin id, an explicit null to
+   detach, or a whole new pin to create. */
+function opBody(op){
+  if (op.kind !== 'locate') return { player: op.player, on: op.on, at: op.at };
+  if (op.loc) return Object.assign({ player: op.player, at: op.at }, op.loc);
+  return { player: op.player, at: op.at, locId: op.locId || null };
+}
 
 let flushing = false;
 let lastTry = 0;
@@ -2502,7 +2668,7 @@ async function flush(){
       try {
         out = await apiJson(await API.send(
           '/api/challenges/' + encodeURIComponent(op.cid) + '/' + OP_PATH[op.kind],
-          'POST', { player: op.player, on: op.on, at: op.at }));
+          'POST', opBody(op)));
       } catch(e){
         // A 4xx means this write will never succeed — most likely the
         // challenge was deleted out from under us. Drop it rather than
@@ -2567,9 +2733,34 @@ const isSkipped = cid => !!T.skips[cid];
 const iAmIn    = cid => !!ME && crewOf(cid).indexOf(ME) >= 0;
 const iAmDone  = cid => !!ME && doneOf(cid).indexOf(ME) >= 0;
 
+/* ---------------------------------------------- the decision model --
+   Every challenge has to reach one of two answers before a route can be
+   built, and the two are deliberately not the same question as "has
+   enough of the crew checked in":
+
+     LOCATED      it has a pin. The team intends to do this one.
+     NOT SELECTED the team decided against it. No pin needed.
+
+   isDecided() is the gate on Make Team Route. Check-ins still run
+   alongside and still drive My Checklist, the crew line and scoring —
+   they are about who is doing it, not whether it is happening. */
+const isNotSelected = cid => !!T.notSel[cid];
+const isSelected    = c => !isNotSelected(c.id);
+const isLocated     = c => !!(c.locId && locById(c.locId));
+const isDecided     = c => isLocated(c) || isNotSelected(c.id);
+function decidedCount(){
+  const all = T.challenges || [];
+  return { done: all.filter(isDecided).length, total: all.length };
+}
+/* What the route is actually built from. */
+function routeChals(){
+  return (T.challenges || []).filter(c => isSelected(c) && isLocated(c) && !isSkipped(c.id));
+}
+function pendingChals(){ return routeChals().filter(c => !isComplete(c)); }
+
 /* CONFIRMED = enough people have checked in, and nobody has pulled it.
-   This is the gate for everything downstream: a challenge only enters
-   the route, a checklist or the score once it is confirmed. */
+   Confirmation gates My Checklist and scoring. It no longer gates the
+   route — see the decision model above. */
 function isConfirmed(c){ return !isSkipped(c.id) && crewOf(c.id).length >= c.need; }
 
 /* COMPLETE = confirmed, and every player who checked in has ticked
@@ -2585,9 +2776,13 @@ function teamPoints(){
   return (T.challenges || []).reduce((a,c) => a + (isComplete(c) ? c.pts : 0), 0);
 }
 /* Points already banked plus points still standing on the route — what
-   the run is worth if everything confirmed actually gets done. */
+   the run is worth if everything on it actually gets done. */
 function projectedPoints(){
-  return confirmedChals().reduce((a,c) => a + c.pts, 0);
+  return routeChals().reduce((a,c) => a + c.pts, 0);
+}
+/* Everything the admin has put on the board, regardless of decision. */
+function boardPoints(){
+  return (T.challenges || []).reduce((a,c) => a + c.pts, 0);
 }
 
 /* ------------------------------------------------------------ the clock */
@@ -2700,14 +2895,31 @@ function initMap(){
     zoomAnimation:true, fadeAnimation:true, markerZoomAnimation:true,
     // zoomSnap stays at the default 1: half steps land tiles on
     // fractional pixel offsets and draw hairline seams at high DPR.
-    wheelPxPerZoomLevel:90
+    wheelPxPerZoomLevel:90,
+    maxZoom: TILE_MAXZOOM
   }).setView(CENTER, ZOOM);
   L.control.zoom({ position:'topleft' }).addTo(map);
   const tl = document.querySelector('.leaflet-top.leaflet-left');
   if (tl) tl.style.marginTop = '84px';
   map.attributionControl.setPrefix('');
+  buildTileLayers();
+  applyDark();
+  map.on('click', onMapClick);
+  map.on('moveend zoomend', () => { if (!$('#gearbox').hidden) estimateCache(); });
+}
+
+function buildTileLayers(){
+  tileLayers.forEach(t => { try { map.removeLayer(t); } catch(e){} });
+  map.setMaxZoom(TILE_MAXZOOM);
+  if (map.getZoom() > TILE_MAXZOOM) map.setZoom(TILE_MAXZOOM);
   tileLayers = basemap().layers.map((l, i) => {
     const t = new CachedLayer(l.url, {
+      // tileSize + zoomOffset ARE the retina fix — see the notes by
+      // TILE_ZOFF. detectRetina is deliberately left off; it would move
+      // maxZoom without moving maxNativeZoom and request zoom 20, which
+      // Esri answers with a grey "no data" bitmap rather than a 404.
+      tileSize: TILE_PX,
+      zoomOffset: TILE_ZOFF,
       maxZoom: TILE_MAXZOOM, maxNativeZoom: TILE_MAXNATIVE, minZoom: 8, crossOrigin: true,
       updateWhenIdle: false, keepBuffer: 2,
       role: l.id, zIndex: 1 + i,
@@ -2716,9 +2928,16 @@ function initMap(){
     t.on('tileunload', e => { if (e.tile._objUrl) URL.revokeObjectURL(e.tile._objUrl); });
     return t.addTo(map);
   });
+}
+/* Changing detail changes tileSize and zoomOffset, neither of which a
+   live Leaflet layer will accept — so the layers are thrown away and
+   rebuilt. Cheap: the tiles themselves come straight back out of
+   IndexedDB. */
+function rebuildTiles(){
+  computeTileGeometry();
+  buildTileLayers();
   applyDark();
-  map.on('click', onMapClick);
-  map.on('moveend zoomend', () => { if (!$('#gearbox').hidden) estimateCache(); });
+  estimateCache();
 }
 /* Night is a dim, NOT an inversion — invert()+hue-rotate is the usual
    fake dark basemap and it looks fine inland, but on this coastline it
@@ -2882,14 +3101,43 @@ async function buildMatrix(pts, onmsg){
    Nearest-neighbour seed, then 2-opt and or-opt to convergence, from
    several random restarts. The same local search v1 shipped, which was
    validated against brute force on 40 random instances. */
-function tourCost(order, mat){
+/* ------------------------------------------------- route shape bias --
+   Pure travel-time minimisation is happy to leave one Bayville stop for
+   the way home, because geometrically that costs almost nothing — the
+   car passes the door anyway. In practice it is the worst possible
+   plan: it is the stop that gets dropped when the clock runs out, and
+   coming back into a town you already cleared feels like lost time even
+   when it is not.
+
+   So a route pays a small penalty every time it moves back INWARD,
+   toward the start, after having gone further out. Expressed in the
+   same units as everything else — seconds — at a third of what that
+   backtrack would actually cost to drive. That is enough to break ties
+   toward "clear the start area, then head out and stay out", and not
+   enough to override a route that is genuinely much shorter.
+
+   The drive home is deliberately not penalised: it is inward by
+   definition and it is compulsory. */
+const BACKTRACK_W = 0.35 / (FALLBACK_MPH * 0.44704);   // seconds per metre
+
+function backtrackPenalty(order, rad){
+  if (!rad) return 0;
+  let far = 0, pen = 0;
+  for (let i = 0; i < order.length; i++){
+    const r = rad[order[i]];
+    if (r < far) pen += (far - r); else far = r;
+  }
+  return pen * BACKTRACK_W;
+}
+function tourCost(order, mat, rad){
   let t = 0, prev = 0;
   for (let i=0;i<order.length;i++){ t += mat.dur[prev][order[i]]; prev = order[i]; }
-  return t + mat.dur[prev][0];            // …and home again
+  t += mat.dur[prev][0];                  // …and home again
+  return t + backtrackPenalty(order, rad);
 }
-function localSearch(order, mat){
+function localSearch(order, mat, rad){
   if (order.length < 2) return order;
-  let best = order.slice(), bt = tourCost(best, mat), improved = true, guard = 0;
+  let best = order.slice(), bt = tourCost(best, mat, rad), improved = true, guard = 0;
   while (improved && guard++ < 60){
     improved = false;
     for (let i=0;i<best.length-1;i++){
@@ -2897,7 +3145,7 @@ function localSearch(order, mat){
         const c = best.slice();
         const seg = c.slice(i, j+1).reverse();
         c.splice(i, j-i+1, ...seg);
-        const t = tourCost(c, mat);
+        const t = tourCost(c, mat, rad);
         if (t < bt - 1){ best = c; bt = t; improved = true; }
       }
     }
@@ -2906,14 +3154,14 @@ function localSearch(order, mat){
         if (p === i) continue;
         const c = best.slice(), it = c.splice(i,1)[0];
         c.splice(p, 0, it);
-        const t = tourCost(c, mat);
+        const t = tourCost(c, mat, rad);
         if (t < bt - 1){ best = c; bt = t; improved = true; }
       }
     }
   }
   return best;
 }
-function solveTour(mat){
+function solveTour(mat, rad){
   const n = mat.n - 1;                    // indices 1..n are the stops
   if (n <= 1) return n === 1 ? [1] : [];
   let best = null, bestT = Infinity;
@@ -2932,7 +3180,7 @@ function solveTour(mat){
       }
       order.push(pick); left.delete(pick); cur = pick;
     }
-    const o = localSearch(order, mat), t = tourCost(o, mat);
+    const o = localSearch(order, mat, rad), t = tourCost(o, mat, rad);
     if (t < bestT){ best = o; bestT = t; }
   }
   return best || [];
@@ -2958,15 +3206,15 @@ function projection(extraLoc){
   const rt = T.route;
   const order = rt && Array.isArray(rt.order) ? rt.order.slice() : [];
 
-  // Locations still worth driving to: at least one confirmed challenge
-  // that is neither complete nor skipped.
-  const pending = id => chalsAt(id).some(c => isConfirmed(c) && !isComplete(c) && !isSkipped(c.id));
+  // Locations still worth driving to: at least one selected, located
+  // challenge that is neither complete nor skipped.
+  const pending = id => chalsAt(id).some(c => isSelected(c) && !isComplete(c) && !isSkipped(c.id));
   let stops = order.filter(id => locById(id) && pending(id));
 
-  // Anything confirmed since the last optimise, appended so the number
-  // never pretends a stop is free just because the route is stale.
-  for (const c of confirmedChals()){
-    if (!isComplete(c) && !isSkipped(c.id) && stops.indexOf(c.locId) < 0 && locById(c.locId)) stops.push(c.locId);
+  // Anything located since the last route was built, appended so the
+  // number never pretends a stop is free just because the route is stale.
+  for (const c of pendingChals()){
+    if (stops.indexOf(c.locId) < 0) stops.push(c.locId);
   }
   if (extraLoc && stops.indexOf(extraLoc) < 0 && locById(extraLoc)) stops.push(extraLoc);
 
@@ -3115,19 +3363,21 @@ function popupHtml(loc){
   cs.forEach(c => {
     const crew = crewOf(c.id), need = c.need;
     const conf = isConfirmed(c), comp = isComplete(c), sk = isSkipped(c.id);
-    const col = sk ? '#6f7a84' : comp ? '#41c9e8' : conf ? '#39d98a' : '#ffb524';
+    const ns = isNotSelected(c.id);
+    const col = ns || sk ? '#6f7a84' : comp ? '#41c9e8' : conf ? '#39d98a' : '#ffb524';
     h += '<div style="margin-top:9px;padding-top:8px;border-top:1px solid #252c33">' +
       '<b style="color:#e9e7e2;font-size:12.5px">' + esc(c.name) + '</b>' +
       '<div style="color:#ffb524;font-size:11px;margin-top:3px">' + c.pts + ' pts &middot; needs ' +
         need + ' ' + (need === 1 ? 'person' : 'people') + '</div>' +
       (c.desc ? '<div style="color:#a7b0b8;font-size:11px;margin-top:4px">' + esc(c.desc) + '</div>' : '') +
       '<div style="color:' + col + ';font-size:11px;margin-top:4px">' +
-        (sk ? 'SKIPPED' : comp ? 'COMPLETE' : conf ? 'CONFIRMED — ' + esc(crew.join(', '))
+        (ns ? 'NOT SELECTED — ' + esc((T.notSel[c.id] || {}).by || '?')
+          : sk ? 'SKIPPED' : comp ? 'COMPLETE' : conf ? 'CONFIRMED — ' + esc(crew.join(', '))
           : (crew.length ? esc(crew.join(', ')) + ' ✓ · needs ' + (need - crew.length) + ' more'
                          : 'nobody in yet · needs ' + need)) +
-        (!conf && !sk && lowTime() ? ' · ⚠ LOW TIME' : '') +
+        (!conf && !sk && !ns && lowTime() ? ' · ⚠ LOW TIME' : '') +
       '</div>' +
-      (sk || comp ? '' :
+      (sk || comp || ns || PREVIEW ? '' :
         '<button data-pop="' + c.id + '" style="margin-top:7px;background:' +
         (iAmIn(c.id) ? 'transparent;border:1px solid #374049;color:#a7b0b8'
                      : 'rgba(65,201,232,.14);border:1px solid #2b5a68;color:#41c9e8') +
@@ -3144,6 +3394,7 @@ function popupHtml(loc){
    anywhere. Both land in dropPin(). */
 let pendingPin = { start:null, loc:null };
 let armReturn = null;                   // what to re-open once the pin lands
+let preArmSheet = null;                 // how far open the sheet was before aiming
 function arm(which){
   armMode = which;
   $('#xhTxt').textContent = which === 'start'
@@ -3151,9 +3402,14 @@ function arm(which){
     : 'Drag the map under the crosshair — or tap anywhere.';
   $('#xhair').hidden = false;
   document.body.dataset.arm = '1';
-  // The admin screen covers the map, so it has to get out of the way —
-  // and come back the moment the pin is placed or cancelled.
-  if (!$('#admin').hidden){ armReturn = 'admin'; $('#admin').hidden = true; }
+  // Whatever is covering the map has to get out of the way — and come
+  // back the moment the pin is placed or cancelled.
+  armReturn = null;
+  if (!$('#locPick').hidden){ armReturn = 'locPick'; $('#locPick').hidden = true; }
+  else if (!$('#admin').hidden){ armReturn = 'admin'; $('#admin').hidden = true; }
+  // Remember how far open the sheet was, so putting the pin down does
+  // not dump the player on a bare map with their list gone.
+  preArmSheet = sheetState;
   if (!isDesktop()) setSheet('hidden');
 }
 function disarm(){
@@ -3161,8 +3417,16 @@ function disarm(){
   armMode = null;
   $('#xhair').hidden = true;
   delete document.body.dataset.arm;
-  if (armReturn === 'admin'){ $('#admin').hidden = false; armReturn = null; }
-  else if (!isDesktop() && sheetState === 'hidden') setSheet('peek');
+  const back = armReturn;
+  armReturn = null;
+  if (back === 'locPick'){ $('#locPick').hidden = false; paintLocPick(); }
+  else if (back === 'admin'){ $('#admin').hidden = false; }
+  // Always put the sheet back where it was. Previously only the
+  // no-overlay path did this, so dropping a pin from the "where is
+  // this?" modal left the sheet hidden behind it and the challenge
+  // list vanished the moment the modal closed.
+  if (!isDesktop() && sheetState === 'hidden') setSheet(preArmSheet && preArmSheet !== 'hidden' ? preArmSheet : 'peek');
+  preArmSheet = null;
 }
 function dropPin(loc){
   const which = armMode;
@@ -3175,13 +3439,28 @@ function onMapClick(e){
   if (!armMode) return;
   dropPin({ lat:e.latlng.lat, lng:e.latlng.lng, label:'Dropped pin' });
 }
+/* THE START LINE IS SHARED STATE, AND THIS IS WHERE THAT BROKE.
+
+   Three routes set it — address search, Use GPS, and dropping a map pin
+   — and only the first two used to call saveEvent(). A pin dropped on
+   the map updated `pendingPin` and the little green "picked" chip and
+   nothing else, so it looked set to the admin, was never written to KV,
+   and no other player ever saw a start marker. Persisting from here
+   means every path goes through one place and none of them can be
+   forgotten again. */
 function setPending(which, loc){
   pendingPin[which] = loc;
   const el = which === 'start' ? $('#sPicked') : $('#lPicked');
-  if (!loc){ el.className = 'picked none'; el.firstChild.textContent = 'No location picked'; return; }
-  el.className = 'picked';
-  el.firstChild.textContent = shortLabel(loc.label) || (loc.lat.toFixed(4) + ', ' + loc.lng.toFixed(4));
-  map.setView([loc.lat, loc.lng], Math.max(map.getZoom(), 14));
+  if (el){
+    if (!loc){ el.className = 'picked none'; el.firstChild.textContent = 'No location picked'; }
+    else {
+      el.className = 'picked';
+      el.firstChild.textContent = shortLabel(loc.label) || (loc.lat.toFixed(4) + ', ' + loc.lng.toFixed(4));
+    }
+  }
+  if (loc) map.setView([loc.lat, loc.lng], Math.max(map.getZoom(), 14));
+  if (which === 'start' && loc && ADMIN) saveEvent({ start: loc });
+  if (which === 'loc') paintLocPick();
 }
 
 /* ================================================================
@@ -3492,11 +3771,17 @@ function latToY(lat, z){
   const r = lat*Math.PI/180;
   return Math.floor((1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI)/2 * Math.pow(2,z));
 }
+/* The zooms to actually download. These are URL zooms, not map zooms —
+   on a retina screen the layer draws map zoom N using tiles from N+1,
+   so a precache that walked map zooms would neatly download every tile
+   the app never asks for and leave the dead zone blank anyway. */
 function cacheJobs(){
   const depth = +$('#tDepth').value;
   const b = map.getBounds(), z0 = Math.round(map.getZoom());
+  const first = Math.min(z0, TILE_MAXNATIVE) + TILE_ZOFF;
+  const last  = Math.min(Math.min(z0 + depth, TILE_MAXNATIVE) + TILE_ZOFF, NATIVE_URL_MAX);
   const jobs = [];
-  for (let z = z0; z <= Math.min(z0 + depth, 17); z++){
+  for (let z = first; z <= last; z++){
     const x1 = lonToX(b.getWest(), z), x2 = lonToX(b.getEast(), z);
     const y1 = latToY(b.getNorth(), z), y2 = latToY(b.getSouth(), z);
     for (let x = x1; x <= x2; x++) for (let y = y1; y <= y2; y++) jobs.push({ z,x,y });
@@ -3508,16 +3793,16 @@ function estimateCache(){
   if (!g || !map) return;
   const n = cacheJobs().length;
   const mb = (n * TILE_KB / 1024).toFixed(n * TILE_KB / 1024 < 10 ? 1 : 0);
-  $('#btnCache').disabled = n > MAX_PRECACHE;
-  g.innerHTML = n > MAX_PRECACHE
-    ? 'This view needs <b>' + n.toLocaleString() + '</b> tiles — over the ' + MAX_PRECACHE.toLocaleString() +
+  $('#btnCache').disabled = n > MAX_PRECACHE_TILES;
+  g.innerHTML = n > MAX_PRECACHE_TILES
+    ? 'This view needs <b>' + n.toLocaleString() + '</b> tiles — over the ' + MAX_PRECACHE_TILES.toLocaleString() +
       ' cap. Zoom in one step or drop the depth.'
     : 'This view: <b>' + n.toLocaleString() + '</b> map squares, roughly <b>' + mb + ' MB</b>. ' +
       'Night and day share one cache, so you only download the area once.';
 }
 async function precache(){
   const jobs = cacheJobs();
-  if (jobs.length > MAX_PRECACHE){ estimateCache(); return; }
+  if (jobs.length > MAX_PRECACHE_TILES){ estimateCache(); return; }
   try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch(e){}
   cacheStop = false;
   $('#btnCache').disabled = true; $('#btnCacheStop').disabled = false;
@@ -3792,33 +4077,50 @@ function renderChallenges(){
 }
 function chalCard(c){
   const conf = isConfirmed(c), comp = isComplete(c), sk = isSkipped(c.id);
-  const cls = 'chc ' + (sk ? 'skipped' : comp ? 'complete' : conf ? 'confirmed' : 'gathering') +
+  const notSel = isNotSelected(c.id), located = isLocated(c);
+  const cls = 'chc ' + (notSel ? 'notsel' : sk ? 'skipped' : comp ? 'complete'
+              : !located ? 'unlocated' : conf ? 'confirmed' : 'gathering') +
               (iAmIn(c.id) ? ' mine' : '');
   const loc = locById(c.locId);
   let h = '<div class="' + cls + '" data-cid="' + c.id + '">' +
     '<div class="ct"><div class="nm">' + esc(c.name) + '</div>' +
     '<div class="pts">' + c.pts + '<small>PTS</small></div></div>';
-  if (PREF.sort === 'points' && loc)
+  if (loc && (PREF.sort === 'points' || notSel))
     h += '<div class="cd" style="color:var(--muted);font-size:10.5px;letter-spacing:.8px;text-transform:uppercase">' +
          esc(loc.name) + '</div>';
   if (c.desc) h += '<div class="cd">' + esc(c.desc) + '</div>';
-  h += '<div class="crew">' + avatarsFor(c.id, c.need) + crewLine(c) + '</div>';
-  const flag = lowFlag(c);
-  if (flag) h += '<div class="cmeta">' + flag + '</div>';
-  if (!sk && !comp){
-    const mine = iAmIn(c.id);
-    /* Once confirmed the crew is locked — §4 puts the toggle on
-       not-yet-confirmed challenges only, so the route stops moving
-       under everyone the moment it is settled. Backing out then is a
-       Skip on the Team Route tab, which re-optimises honestly.
 
-       A locked challenge gets a line of text, NOT a greyed-out button:
-       a disabled control still invites the tap and then says nothing
-       about what to do instead. */
-    if (conf) h += '<div class="cact"><p class="hint" style="margin:0">Locked in. To drop it, use <b>Skip</b> on the Team Route tab — that pulls it for everyone and offers a re-optimise.</p></div>';
-    else h += '<div class="cact"><button class="btn wide ' + (mine ? 'leave' : 'join') +
-      '" data-join="' + c.id + '">' + (mine ? 'Back out' : "I'm in") + '</button></div>';
+  if (notSel){
+    h += '<div class="crew"><span class="tag">Not selected</span>' +
+         '<span class="who"><i>' + esc(T.notSel[c.id].by || 'someone') + ' took it off the list</i></span></div>';
+    if (!PREVIEW) h += '<div class="cact"><button class="btn wide sm" data-unselect="' + c.id + '">Put it back</button></div>';
+    return h + '</div>';
   }
+
+  h += '<div class="crew">' + avatarsFor(c.id, c.need) + crewLine(c) + '</div>';
+  const bits = [lowFlag(c)];
+  if (!located) bits.push('<span class="noloc">&#9678; No location yet</span>');
+  const meta = bits.filter(Boolean).join('');
+  if (meta) h += '<div class="cmeta">' + meta + '</div>';
+
+  if (sk || comp) return h + '</div>';
+
+  const acts = [];
+  if (!located){
+    // The decision this challenge is waiting on. Both answers are one
+    // tap, and either of them counts as decided.
+    acts.push('<div class="row"><button class="btn join" data-locate="' + c.id + '">Set location</button>' +
+              '<button class="btn ghost" data-notsel="' + c.id + '">Not doing it</button></div>');
+  } else {
+    const mine = iAmIn(c.id);
+    if (conf) acts.push('<p class="hint" style="margin:0 0 8px">Crew is locked in. To drop the whole stop, use <b>Skip</b> on the Team Route tab.</p>');
+    else acts.push('<button class="btn wide ' + (mine ? 'leave' : 'join') + '" data-join="' + c.id + '">' +
+                   (mine ? 'Back out' : "I'm in") + '</button>');
+    acts.push('<div class="row" style="margin-top:8px">' +
+      '<button class="btn ghost sm" data-locate="' + c.id + '">Change pin</button>' +
+      '<button class="btn ghost sm" data-notsel="' + c.id + '">Not doing it</button></div>');
+  }
+  if (!PREVIEW) h += '<div class="cact">' + acts.join('') + '</div>';
   return h + '</div>';
 }
 
@@ -3860,7 +4162,7 @@ function bookRows(){
   for (const id of T.route.order){
     const loc = locById(id);
     if (!loc) continue;
-    const cs = chalsAt(id).filter(c => isConfirmed(c) || isSkipped(c.id));
+    const cs = chalsAt(id).filter(c => isSelected(c) && (isLocated(c) || isSkipped(c.id)));
     const live = cs.filter(c => !isSkipped(c.id));
     const allDone = live.length > 0 && live.every(isComplete);
     const allSkip = cs.length > 0 && cs.every(c => isSkipped(c.id));
@@ -3888,7 +4190,7 @@ const tod = d => clockTxt(d.getHours()*3600 + d.getMinutes()*60);
 function renderProjection(){
   const p = projection();
   const el = $('#proj');
-  const conf = confirmedChals().length;
+  const conf = routeChals().length;
   if (!T.event || !T.event.start){
     el.className = '';
     $('#pjBig').textContent = 'No start line set';
@@ -3898,10 +4200,10 @@ function renderProjection(){
   }
   if (!p || !p.stops.length){
     el.className = '';
-    $('#pjBig').textContent = conf ? 'Nothing left to drive to' : 'Nothing confirmed yet';
+    $('#pjBig').textContent = conf ? 'Nothing left to drive to' : 'Nothing on the route yet';
     $('#pjMid').textContent = conf
-      ? 'Every confirmed challenge is done or skipped. Head back to the start line.'
-      : 'Check into challenges on the Challenges tab. Once enough people are in, they land here.';
+      ? 'Every located challenge is done or skipped. Head back to the start line.'
+      : 'Give challenges a pin on the Challenges tab — anything located lands here.';
     $('#pjSml').textContent = ''; $('#pjBar').style.width = '0';
     return;
   }
@@ -3928,7 +4230,7 @@ function renderBook(){
   const box = $('#rb'), b = bookRows();
   if (!b){
     box.innerHTML = '<div class="emptybox" style="border:0;border-radius:0">No route yet.<br>' +
-      'Confirm some challenges, then hit <b>Optimize team route</b>.</div>';
+      'Confirm some challenges, then hit <b>Make team route</b>.</div>';
     $('#rbSub').textContent = 'no route';
     $('#rbFoot').textContent = '';
     return;
@@ -3987,9 +4289,9 @@ function renderPeek(){
   const b = bookRows();
   if (!b){
     $('#pkN').textContent = '--';
-    const conf = confirmedChals().length;
+    const conf = routeChals().length;
     $('#pkT').textContent = conf ? 'Route not built' : 'No route yet';
-    $('#pkS').textContent = conf ? 'Team Route → optimize' : 'Challenges → check in';
+    $('#pkS').textContent = conf ? 'Team Route → make it' : 'Challenges → check in';
     return;
   }
   const i = b.rows.findIndex(r => r.state === 'todo');
@@ -4048,11 +4350,13 @@ function doRender(){
   if (!T) return;
   renderChallenges();
   renderMine();
+  renderDecide();
   renderProjection();
   renderBook();
   renderPeek();
   renderMarkers();
   renderChips();
+  if (!$('#locPick').hidden) paintLocPick();
   paintHead();
   if (!$('#admin').hidden) renderAdmin();
 }
@@ -4061,6 +4365,7 @@ function doRender(){
    PLAYER ACTIONS
    ================================================================ */
 async function toggleJoin(cid){
+  if (blockedByPreview()) return;
   if (!ME){ showWho(); return; }
   const c = chalById(cid);
   if (!c) return;
@@ -4097,9 +4402,10 @@ async function toggleJoin(cid){
   }
   enqueue('checkin', cid, true);
   const c2 = chalById(cid);
-  if (c2 && isConfirmed(c2)) toast('Confirmed — re-optimize the route', 'ok');
+  if (c2 && isConfirmed(c2)) toast('Confirmed — rebuild the route', 'ok');
 }
 function toggleMyDone(cid){
+  if (blockedByPreview()) return;
   if (!ME) return;
   enqueue('complete', cid, !iAmDone(cid));
 }
@@ -4107,6 +4413,7 @@ function toggleMyDone(cid){
    and the whole place is off. Every confirmed, unfinished challenge
    there comes off with it, and the route is offered a re-optimise. */
 async function skipStop(locId){
+  if (blockedByPreview()) return;
   const loc = locById(locId);
   const cs = chalsAt(locId).filter(c => isConfirmed(c) && !isComplete(c) && !isSkipped(c.id));
   if (!cs.length) return;
@@ -4123,26 +4430,185 @@ async function skipStop(locId){
       ' worth <b>' + pts + ' points</b> off the route for everyone.' +
       (after ? '<br><br>Current projection: return ' + tod(after.returnAt) +
         (after.lateMin ? ', <b style="color:var(--red)">' + after.lateMin + ' min late</b>' : ', on pace') + '.' : '') +
-      '<br><br>You can re-optimise straight after.',
+      '<br><br>You can rebuild the route straight after.',
     ok: 'Skip it', cancel: 'Keep it', danger: true
   });
   if (!ok) return;
   cs.forEach(c => enqueue('skip', c.id, true));
-  toast('Stop skipped — re-optimize the route', 'ok');
+  toast('Stop skipped — rebuild the route', 'ok');
   goTab('route');
+}
+
+/* ================================================================
+   PREVIEW AS PLAYER
+   The admin needs to see exactly what the other six see without
+   joining in - checking into a challenge "just to look" would put a
+   real stop on a real route. So preview removes every write path
+   rather than merely hiding the buttons: PREVIEW is checked inside the
+   action handlers too, not only when drawing them.
+   ================================================================ */
+let PREVIEW = false;
+function setPreview(on){
+  PREVIEW = !!on;
+  $('#previewBar').hidden = !PREVIEW;
+  document.body.classList.toggle('previewing', PREVIEW);
+  if (PREVIEW){
+    $('#admin').hidden = true;
+    goTab('chal');
+    setSheet(isDesktop() ? 'open' : 'half');
+  } else {
+    $('#admin').hidden = false;
+  }
+  renderAll();
+}
+/* Every player write funnels through this. One place to say no. */
+function blockedByPreview(){
+  if (!PREVIEW) return false;
+  toast('Preview only - exit preview to take part', 'err');
+  return true;
+}
+
+/* ---------------------------------------------- decisions + the gate */
+function renderDecide(){
+  const d = decidedCount();
+  const lbl = $('#decLbl'), bar = $('#decBar'), hint = $('#decHint'), btn = $('#btnOpt');
+  if (!lbl) return;
+  lbl.textContent = d.done + ' of ' + d.total;
+  bar.style.width = d.total ? (d.done / d.total * 100).toFixed(0) + '%' : '0';
+  const left = d.total - d.done;
+  const ready = d.total > 0 && left === 0;
+  if (!d.total) hint.textContent = 'No challenges on the board yet.';
+  else if (left) hint.innerHTML = '<b>' + left + '</b> still undecided. Every challenge needs a pin, ' +
+    'or to be marked <b>Not doing it</b>, before the route can be built.';
+  else hint.textContent = 'All decided. ' + pendingChals().length + ' stop' +
+    (pendingChals().length === 1 ? '' : 's') + ' to route.';
+  btn.disabled = !ready || PREVIEW;
+  btn.title = ready ? '' : 'Decide on all challenges first';
+}
+
+/* ---------------------------------------------- where is this one? -- */
+let locPickFor = null;
+let locPickMode = 'challenge';    // 'challenge' | 'adminform'
+/* Also used by the admin's own challenge form, where the answer is
+   stashed in adminPin instead of being written straight to KV — the
+   challenge does not exist yet at that point. */
+function openLocPick(cid, mode){
+  locPickMode = mode || 'challenge';
+  if (locPickMode === 'challenge' && blockedByPreview()) return;
+  const c = locPickMode === 'adminform' ? { name: $('#aName').value.trim() || 'this challenge', locId: (adminPin || {}).locId }
+                                        : chalById(cid);
+  if (!c) return;
+  locPickFor = locPickMode === 'adminform' ? '__form' : cid;
+  setPending('loc', null);
+  $('#lpName').textContent = c.name;
+  $('#lpPlace').value = (locById(c.locId) || {}).name || c.name;
+  $('#lQ').value = '';
+  $('#lRes').style.display = 'none';
+  $('#lpClear').hidden = locPickMode === 'adminform' ? !(adminPin) : !isLocated(c);
+  paintLocPick();
+  $('#locPick').hidden = false;
+}
+/* The existing-pin list. This is the "two challenges at the same diner"
+   case: reuse the pin rather than stacking a second one on the kerb. */
+function paintLocPick(){
+  const box = $('#lpExisting'), wrap = $('#lpExistingWrap');
+  if (!box) return;
+  const locs = (T.locations || []).filter(l => !l.pending);
+  wrap.hidden = !locs.length;
+  const cur = locPickMode === 'adminform' ? (adminPin || {}).locId
+            : (locPickFor ? (chalById(locPickFor) || {}).locId : null);
+  setListHtml(box, locs.map(l => {
+    const n = chalsAt(l.id).length;
+    return '<div data-pick="' + l.id + '"' + (l.id === cur ? ' style="background:var(--amber-g)"' : '') + '>' +
+      '<div class="lpitem"><span class="n"><b>' + esc(l.name) + '</b>' +
+      esc(shortLabel(l.address || '') || (l.lat.toFixed(4) + ', ' + l.lng.toFixed(4))) + '</span>' +
+      '<span class="c">' + n + ' here</span></div></div>';
+  }).join(''));
+  const pin = pendingPin.loc;
+  $('#lpSave').disabled = !pin;
+}
+/* Rewrite the list only when it actually changed. A poll landing while
+   the modal is open would otherwise replace the innerHTML under the
+   user's finger, and the tap lands on a node that is no longer in the
+   document. */
+function setListHtml(el, html){
+  if (el._html === html) return;
+  el._html = html;
+  el.innerHTML = html;
+}
+function saveLocPick(){
+  const cid = locPickFor, pin = pendingPin.loc;
+  if (!cid || !pin) return;
+  $('#locPick').hidden = true;
+  const name = ($('#lpPlace').value || '').trim() || (chalById(cid) || {}).name || 'Stop';
+  if (locPickMode === 'adminform'){
+    adminPin = { lat: pin.lat, lng: pin.lng, label: pin.label || '', name };
+    locPickFor = null; paintAdminPin();
+    return;
+  }
+  locPickFor = null;
+  enqueue('locate', cid, true, {
+    loc: { name, lat: pin.lat, lng: pin.lng, address: pin.label || '' },
+    tmpLocId: 'tmp' + uid()
+  });
+  toast('Pin set - everyone sees it on the next sync', 'ok');
+}
+function pickExisting(locId){
+  const cid = locPickFor;
+  if (!cid) return;
+  $('#locPick').hidden = true;
+  if (locPickMode === 'adminform'){
+    adminPin = { locId }; locPickFor = null; paintAdminPin();
+    return;
+  }
+  locPickFor = null;
+  enqueue('locate', cid, true, { locId });
+  toast('Added to that pin', 'ok');
+}
+function clearLoc(){
+  const cid = locPickFor;
+  if (!cid) return;
+  $('#locPick').hidden = true;
+  if (locPickMode === 'adminform'){
+    adminPin = null; locPickFor = null; paintAdminPin();
+    return;
+  }
+  locPickFor = null;
+  enqueue('locate', cid, true, { locId: null });
+  toast('Pin removed', 'ok');
+}
+async function setNotSelected(cid, on){
+  if (blockedByPreview()) return;
+  const c = chalById(cid);
+  if (!c) return;
+  if (on){
+    const ok = await ask({
+      title: 'Take it off the list?',
+      body: '<b>' + esc(c.name) + '</b> is worth <b>' + c.pts + ' points</b>. Marking it ' +
+            '<b>Not doing it</b> counts as a decision for the whole team, so the route can be built ' +
+            'without it. Anyone can put it back.',
+      ok: 'Not doing it', cancel: 'Keep it'
+    });
+    if (!ok) return;
+  }
+  enqueue('select', cid, on);
 }
 
 /* ------------------------------------------------------- optimise ---- */
 let optimising = false;
 async function optimizeRoute(){
-  if (optimising) return;
+  if (optimising || blockedByPreview()) return;
   if (!ME){ showWho(); return; }
   const ev = T.event || EMPTY.event;
   if (!ev.start){ toast('No start line set — ask the admin', 'err'); return; }
-  const conf = confirmedChals().filter(c => !isComplete(c));
+  const dc = decidedCount();
+  if (dc.done < dc.total){
+    toast('Decide on all ' + dc.total + ' challenges first — ' + (dc.total - dc.done) + ' to go', 'err');
+    return;
+  }
   const locIds = [];
-  for (const c of conf) if (locIds.indexOf(c.locId) < 0 && locById(c.locId)) locIds.push(c.locId);
-  if (!locIds.length){ toast('Nothing confirmed to route yet', 'err'); return; }
+  for (const c of pendingChals()) if (locIds.indexOf(c.locId) < 0) locIds.push(c.locId);
+  if (!locIds.length){ toast('Nothing located to route yet', 'err'); return; }
   if (locIds.length > 40){ toast('Too many stops for one route (40 max)', 'err'); return; }
 
   optimising = true;
@@ -4153,7 +4619,10 @@ async function optimizeRoute(){
       .concat(locIds.map(id => { const l = locById(id); return { lat:l.lat, lng:l.lng }; }));
     const mat = await buildMatrix(pts, m => { $('#pjSml').textContent = m; });
     prog.firstChild.style.width = '65%';
-    const order = solveTour(mat);
+    // How far each stop is from the start line, straight line — the
+    // radius the backtrack penalty is measured against.
+    const rad = pts.map(q => haversine(pts[0], q));
+    const order = solveTour(mat, rad);
     prog.firstChild.style.width = '85%';
 
     const legs = [];
@@ -4647,8 +5116,6 @@ function paintMe(){
 /* ================================================================
    ADMIN
    ================================================================ */
-let editLoc = null;      // location being edited, or null for "new"
-let editChal = null;     // { locId, chal|null }
 
 function showAdmin(){
   $('#admin').hidden = false;
@@ -4656,7 +5123,7 @@ function showAdmin(){
   $('#admGate').hidden = unlocked;
   $('#admMain').hidden = !unlocked;
   $('#admWho').textContent = unlocked ? 'unlocked' : 'locked';
-  if (unlocked){ syncEventInputs(); renderAdmin(); }
+  if (unlocked){ syncEventInputs(); resetChalForm(); renderAdmin(); }
   else setTimeout(() => $('#admCode').focus(), 80);
 }
 async function tryAdmin(code){
@@ -4707,143 +5174,187 @@ function renderAdmin(){
   if (!ADMIN || $('#admMain').hidden) return;
   const locs = T.locations || [];
   const chals = T.challenges || [];
-  $('#admCount').textContent = locs.length + ' places · ' + chals.length + ' challenges';
-  $('#aPts').textContent = teamPoints();
+  const d = decidedCount();
+
+  /* Points are the thing the admin is actually balancing, so they get
+     the headline: what is on the board, what survived the team's
+     decisions, and what has actually been banked. */
+  $('#admCount').textContent = chals.length + ' challenges · ' + boardPoints() +
+    ' points possible · ' + locs.length + ' pin' + (locs.length === 1 ? '' : 's');
+  $('#aBoardPts').textContent = boardPoints();
+  $('#aRoutePts').textContent = projectedPoints();
+  $('#aScored').textContent = teamPoints();
+  $('#aDecided').textContent = d.done + '/' + d.total;
+  $('#aLocated').textContent = chals.filter(isLocated).length;
   $('#aConf').textContent = chals.filter(isConfirmed).length;
   $('#aDone').textContent = chals.filter(isComplete).length;
   $('#aSkip').textContent = chals.filter(c => isSkipped(c.id)).length;
 
   const b = bookRows();
-  const p = projection();
+  const pj = projection();
   $('#aRoute').innerHTML = !T.route
-    ? 'No shared route built yet.'
+    ? (d.done < d.total
+        ? '<b>' + (d.total - d.done) + '</b> challenge(s) still undecided — the team cannot build a route yet.'
+        : 'All decided. No route built yet.')
     : 'Route: <b>' + T.route.order.length + ' stops</b>, built by ' + esc(T.route.by || '?') +
       (b ? ' · home by <b>' + tod(b.finish) + '</b>' : '') +
-      (p && p.lateMin ? ' · <b style="color:var(--red)">' + p.lateMin + ' min late, &minus;' +
-        p.penalty + ' pts</b>' : p ? ' · <b style="color:var(--green)">on pace</b>' : '') +
-      ' · projected total <b>' + projectedPoints() + ' pts</b>';
+      (pj && pj.lateMin ? ' · <b style="color:var(--red)">' + pj.lateMin + ' min late, &minus;' +
+        pj.penalty + ' pts</b>' : pj ? ' · <b style="color:var(--green)">on pace</b>' : '');
 
-  $('#admEmpty').style.display = locs.length ? 'none' : 'block';
-  $('#admList').innerHTML = locs.map(loc => {
+  /* Unlocated challenges are listed first and on their own: they are
+     the only thing standing between the team and a route. */
+  const unloc = chals.filter(c => !isLocated(c) && !isNotSelected(c.id));
+  const notsel = chals.filter(c => isNotSelected(c.id));
+  let h = '';
+  if (unloc.length){
+    h += '<div class="grph"><div class="pin">' + unloc.length + '</div><b>No location yet</b>' +
+         '<div class="ln"></div><span>' + unloc.reduce((a,c) => a + c.pts, 0) + ' pts</span></div>' +
+         unloc.map(adminChalRow).join('');
+  }
+  h += locs.map(loc => {
     const cs = chalsAt(loc.id);
     return '<div class="lcard"><div class="lh"><div class="lt">' +
       '<b>' + esc(loc.name) + '</b><span>' +
       (loc.address ? esc(shortLabel(loc.address)) : loc.lat.toFixed(4) + ', ' + loc.lng.toFixed(4)) +
+      (loc.by ? ' · pinned by ' + esc(loc.by) : '') +
+      '<br>' + cs.length + ' challenge' + (cs.length === 1 ? '' : 's') + ' · ' +
+      cs.reduce((a,c) => a + c.pts, 0) + ' pts' +
       (loc.desc ? '<br>' + esc(loc.desc) : '') + '</span></div>' +
       '<div class="lb">' +
         '<button class="minibtn go" data-lgo="' + loc.id + '">Map</button>' +
-        '<button class="minibtn" data-ledit="' + loc.id + '">Edit</button>' +
         '<button class="minibtn danger" data-ldel="' + loc.id + '">Del</button>' +
       '</div></div><div class="lbody">' +
-      (cs.length ? cs.map(c => {
-        const crew = crewOf(c.id), d = doneOf(c.id);
-        const state = isSkipped(c.id) ? '<span class="tag">skipped</span>'
-          : isComplete(c) ? '<span class="tag cy">complete</span>'
-          : isConfirmed(c) ? '<span class="tag ok">confirmed</span>'
-          : '<span class="tag warn">' + crew.length + '/' + c.need + '</span>';
-        return '<div class="chc" style="margin-bottom:7px">' +
-          '<div class="ct"><div class="nm">' + esc(c.name) + '</div>' +
-          '<div class="pts">' + c.pts + '<small>PTS</small></div></div>' +
-          (c.desc ? '<div class="cd">' + esc(c.desc) + '</div>' : '') +
-          '<div class="crew">' + state +
-            '<span class="who">needs ' + c.need + ' · ' +
-            (crew.length ? esc(crew.join(', ')) : '<i>nobody in</i>') +
-            (d.length ? ' <i>(' + d.length + ' done)</i>' : '') + '</span>' + lowFlag(c) + '</div>' +
-          '<div class="cact"><div class="row">' +
-            '<button class="minibtn" data-cedit="' + c.id + '">Edit</button>' +
-            '<button class="minibtn danger" data-cdel="' + c.id + '">Delete</button>' +
-          '</div></div></div>';
-      }).join('') : '<p class="hint" style="margin:2px 0 8px">No challenges here yet.</p>') +
-      '<button class="btn sm wide" data-cadd="' + loc.id + '">+ Add a challenge here</button>' +
+      (cs.length ? cs.map(adminChalRow).join('')
+                 : '<p class="hint" style="margin:2px 0 8px">Nothing here yet.</p>') +
       '</div></div>';
   }).join('');
+  if (notsel.length){
+    h += '<div class="grph"><div class="pin">' + notsel.length + '</div><b>Not selected</b>' +
+         '<div class="ln"></div><span>' + notsel.reduce((a,c) => a + c.pts, 0) + ' pts declined</span></div>' +
+         notsel.map(adminChalRow).join('');
+  }
+  $('#admEmpty').style.display = chals.length ? 'none' : 'block';
+  $('#admList').innerHTML = h;
 }
-async function saveLocation(){
-  if (!ADMIN) return;
-  const name = $('#lName').value.trim();
-  const pin = pendingPin.loc;
-  if (!name){ toast('Give the location a name', 'err'); $('#lName').focus(); return; }
-  if (!pin && !editLoc){ toast('Pick a point — search, map pin, or GPS', 'err'); return; }
-  const body = {
-    id: editLoc ? editLoc.id : undefined,
-    name,
-    address: pin ? (pin.label || '') : (editLoc ? editLoc.address : ''),
-    desc: $('#lDesc').value.trim(),
-    lat: pin ? pin.lat : (editLoc ? editLoc.lat : undefined),
-    lng: pin ? pin.lng : (editLoc ? editLoc.lng : undefined)
-  };
-  try {
-    await apiJson(await API.send('/api/locations', 'POST', body));
-    resetLocForm();
-    await pull(true);
-    toast(editLoc ? 'Location updated' : 'Location added', 'ok');
-  } catch(e){ toast('Save failed: ' + e.message, 'err'); }
+/* One challenge row, used everywhere in the admin overview. Points are
+   always visible — that was the whole complaint. */
+function adminChalRow(c){
+  const crew = crewOf(c.id), dn = doneOf(c.id);
+  const state = isNotSelected(c.id) ? '<span class="tag">not selected</span>'
+    : isSkipped(c.id) ? '<span class="tag">skipped</span>'
+    : isComplete(c) ? '<span class="tag cy">complete</span>'
+    : isConfirmed(c) ? '<span class="tag ok">confirmed</span>'
+    : '<span class="tag warn">' + crew.length + '/' + c.need + ' in</span>';
+  return '<div class="chc" style="margin-bottom:7px">' +
+    '<div class="ct"><div class="nm">' + esc(c.name) + '</div>' +
+    '<div class="pts">' + c.pts + '<small>PTS</small></div></div>' +
+    (c.desc ? '<div class="cd">' + esc(c.desc) + '</div>' : '') +
+    '<div class="crew">' + state +
+      (isLocated(c) ? '' : '<span class="noloc">&#9678; no pin</span>') +
+      '<span class="who">needs ' + c.need + ' · ' +
+      (crew.length ? esc(crew.join(', ')) : '<i>nobody in</i>') +
+      (dn.length ? ' <i>(' + dn.length + ' done)</i>' : '') + '</span>' + lowFlag(c) + '</div>' +
+    '<div class="cact"><div class="row">' +
+      '<button class="minibtn" data-cedit="' + c.id + '">Edit</button>' +
+      '<button class="minibtn danger" data-cdel="' + c.id + '">Delete</button>' +
+    '</div></div></div>';
 }
-function resetLocForm(){
-  editLoc = null;
-  $('#lName').value = ''; $('#lDesc').value = ''; $('#lQ').value = '';
-  $('#lRes').style.display = 'none';
-  setPending('loc', null);
-  $('#locFormMode').textContent = 'new';
-  $('#lSave').textContent = 'Add location';
-  $('#lCancel').hidden = true;
-}
-function startEditLoc(id){
-  const loc = locById(id);
-  if (!loc) return;
-  editLoc = loc;
-  $('#lName').value = loc.name;
-  $('#lDesc').value = loc.desc || '';
-  setPending('loc', { lat:loc.lat, lng:loc.lng, label: loc.address || 'Saved point' });
-  $('#locFormMode').textContent = 'editing';
-  $('#lSave').textContent = 'Save changes';
-  $('#lCancel').hidden = false;
-  $('#lName').scrollIntoView({ behavior:'smooth', block:'center' });
-}
+
 /* The "people needed" choices are the roster, so a new name never needs
    a matching <option> added by hand. */
-function fillNeedOptions(){
-  const sel = $('#ceNeed');
-  if (sel.options.length === PLAYERS.length) return;
+function fillNeedOptions(sel){
+  if (!sel || sel.options.length === PLAYERS.length) return;
   sel.innerHTML = PLAYERS.map((_, i) => {
     const n = i + 1;
     const label = n === 1 ? '1 person'
-      : n === PLAYERS.length ? n + ' — everyone'
+      : n === PLAYERS.length ? n + ' \u2014 everyone'
       : n + ' people';
     return '<option value="' + n + '">' + label + '</option>';
   }).join('');
 }
-function openChalEditor(locId, chal){
-  fillNeedOptions();
-  editChal = { locId, chal: chal || null };
-  const loc = locById(locId);
-  $('#ceTitle').textContent = chal ? 'Edit challenge' : 'New challenge';
-  $('#ceWhere').textContent = loc ? 'at ' + loc.name : '';
-  $('#ceName').value = chal ? chal.name : '';
-  $('#cePts').value = chal ? chal.pts : 10;
-  $('#ceNeed').value = String(chal ? chal.need : 1);
-  $('#ceDesc').value = chal ? (chal.desc || '') : '';
-  $('#chEdit').hidden = false;
-  setTimeout(() => $('#ceName').focus(), 60);
+
+/* ---------------------------------------------- the admin challenge form
+   One form, used for both new and edit. Location is optional and lives
+   in adminPin: null means "no pin", a string means an existing pin, an
+   object means a point that has not been saved yet. */
+let editChal = null;          // the challenge being edited, or null
+let adminPin = null;          // null | { locId } | { lat, lng, label, name }
+
+function resetChalForm(){
+  editChal = null;
+  adminPin = null;
+  fillNeedOptions($('#aNeed'));
+  $('#aName').value = '';
+  $('#aPts2').value = 10;
+  $('#aNeed').value = '1';
+  $('#aDesc').value = '';
+  $('#chalFormMode').textContent = 'new';
+  $('#aSave').textContent = 'Add challenge';
+  $('#aCancel').hidden = true;
+  paintAdminPin();
 }
-async function saveChal(){
-  if (!editChal || !ADMIN) return;
-  const name = $('#ceName').value.trim();
-  if (!name){ toast('Give it a name', 'err'); $('#ceName').focus(); return; }
+function paintAdminPin(){
+  const el = $('#aLoc');
+  if (!el) return;
+  let label = null;
+  if (adminPin && adminPin.locId){
+    const l = locById(adminPin.locId);
+    label = l ? l.name : null;
+  } else if (adminPin && adminPin.lat != null){
+    label = adminPin.name || shortLabel(adminPin.label) ||
+            (adminPin.lat.toFixed(4) + ', ' + adminPin.lng.toFixed(4));
+  }
+  el.className = 'picked' + (label ? '' : ' none');
+  el.firstChild.textContent = label || "No location \u2014 that's fine";
+  $('#aClrLoc').hidden = !label;
+}
+function startEditChal(cid){
+  const c = chalById(cid);
+  if (!c) return;
+  fillNeedOptions($('#aNeed'));
+  editChal = c;
+  adminPin = c.locId ? { locId: c.locId } : null;
+  $('#aName').value = c.name;
+  $('#aPts2').value = c.pts;
+  $('#aNeed').value = String(c.need);
+  $('#aDesc').value = c.desc || '';
+  $('#chalFormMode').textContent = 'editing';
+  $('#aSave').textContent = 'Save changes';
+  $('#aCancel').hidden = false;
+  paintAdminPin();
+  $('#aName').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+async function saveChalForm(){
+  if (!ADMIN) return;
+  const name = $('#aName').value.trim();
+  if (!name){ toast('Give it a name', 'err'); $('#aName').focus(); return; }
   const body = {
-    id: editChal.chal ? editChal.chal.id : undefined,
+    id: editChal ? editChal.id : undefined,
     name,
-    pts: parseInt($('#cePts').value, 10) || 0,
-    need: parseInt($('#ceNeed').value, 10) || 1,
-    desc: $('#ceDesc').value.trim()
+    pts: parseInt($('#aPts2').value, 10) || 0,
+    need: parseInt($('#aNeed').value, 10) || 1,
+    desc: $('#aDesc').value.trim()
   };
   try {
-    await apiJson(await API.send(
-      '/api/locations/' + encodeURIComponent(editChal.locId) + '/challenges', 'POST', body));
-    $('#chEdit').hidden = true;
-    editChal = null;
+    // A brand-new point has to become a location before the challenge
+    // can reference it; an existing pin is just an id.
+    if (adminPin && adminPin.lat != null){
+      const out = await apiJson(await API.send('/api/locations', 'POST', {
+        name: adminPin.name || name,
+        address: adminPin.label || '',
+        lat: adminPin.lat, lng: adminPin.lng
+      }));
+      body.locId = out.location.id;
+    } else if (adminPin && adminPin.locId){
+      body.locId = adminPin.locId;
+    } else {
+      body.locId = null;
+    }
+    await apiJson(await API.send('/api/challenges', 'POST', body));
+    const was = !!editChal;
+    resetChalForm();
     await pull(true);
-    toast('Challenge saved', 'ok');
+    toast(was ? 'Challenge updated' : 'Challenge added', 'ok');
   } catch(e){ toast('Save failed: ' + e.message, 'err'); }
 }
 
@@ -4993,16 +5504,14 @@ function wireSearch(which, inpSel, goSel, pinSel, meSel, resSel){
   box.addEventListener('click', e => {
     const d = e.target.closest('div[data-i]');
     if (!d || !box._res) return;
-    setPending(which, box._res[+d.dataset.i]);
+    setPending(which, box._res[+d.dataset.i]);   // persists, see setPending
     box.style.display = 'none';
     inp.value = '';
-    if (which === 'start') saveEvent({ start: pendingPin.start });
   });
   $(pinSel).addEventListener('click', () => arm(which));
   $(meSel).addEventListener('click', () => {
     if (!lastFix){ toast('No GPS fix yet — hit the ◎ button first', 'err'); return; }
     setPending(which, { lat:lastFix.lat, lng:lastFix.lng, label:'My position' });
-    if (which === 'start') saveEvent({ start: pendingPin.start });
   });
 }
 
@@ -5039,6 +5548,12 @@ function wire(){
   $('#chalList').addEventListener('click', e => {
     const j = e.target.closest('[data-join]');
     if (j && !j.disabled){ toggleJoin(j.dataset.join); return; }
+    const lo = e.target.closest('[data-locate]');
+    if (lo){ openLocPick(lo.dataset.locate); return; }
+    const ns = e.target.closest('[data-notsel]');
+    if (ns){ setNotSelected(ns.dataset.notsel, true); return; }
+    const us = e.target.closest('[data-unselect]');
+    if (us){ setNotSelected(us.dataset.unselect, false); return; }
     const card = e.target.closest('[data-cid]');
     if (card){
       const c = chalById(card.dataset.cid);
@@ -5102,7 +5617,7 @@ function wire(){
   $('#rbCopy').addEventListener('click', () => copyText(bookText()));
   $('#rbClear').addEventListener('click', async () => {
     const ok = await ask({ title:'Clear the route?',
-      body:'Removes the shared route for <b>everyone</b>. Check-ins are untouched — you can re-optimise straight away.',
+      body:'Removes the shared route for <b>everyone</b>. Check-ins are untouched — you can rebuild it straight away.',
       ok:'Clear it', danger:true });
     if (!ok) return;
     try {
@@ -5193,6 +5708,27 @@ function wire(){
   });
   dim.addEventListener('change', savePref);
 
+  /* Map detail. The honest number is in the hint, because the cost is
+     not obvious: each step up is 4x the tiles for the same ground, and
+     the whole point of this app is having the map already on the phone
+     when the signal goes. */
+  const det = $('#fDetail'), detHint = $('#detailHint');
+  const paintDetail = () => {
+    det.value = PREF.detail === 'sharp' ? 'sharp' : 'balanced';
+    const px = 256 >> activeZoff();
+    const ratio = 256 / (px * DPR_NOW);
+    detHint.innerHTML = 'This screen is <b>' + DPR_NOW + '&times;</b>. Tiles are drawn at <b>' +
+      px + 'px</b>, giving <b>' + ratio.toFixed(2) + '</b> image pixels per screen pixel' +
+      (ratio >= 0.99 ? ' — pixel-for-pixel or better.' : ' — still slightly upscaled.') +
+      ' Esri has no retina tiles, so this is done by fetching one zoom level deeper.';
+  };
+  paintDetail();
+  det.addEventListener('change', () => {
+    PREF.detail = det.value; savePref();
+    rebuildTiles(); paintDetail();
+    toast(det.value === 'sharp' ? 'Sharpest map — offline downloads are much bigger' : 'Balanced map detail', 'ok');
+  });
+
   const vc = $('#fVoice');
   vc.checked = !!PREF.voice;
   vc.addEventListener('change', () => {
@@ -5268,20 +5804,36 @@ function wire(){
   wireSearch('start', '#sQ', '#sGo', '#sPin', '#sMe', '#sRes');
   wireSearch('loc',   '#lQ', '#lGo', '#lPin', '#lMe', '#lRes');
 
-  $('#lSave').addEventListener('click', saveLocation);
-  $('#lCancel').addEventListener('click', resetLocForm);
+  $('#aSave').addEventListener('click', saveChalForm);
+  $('#aCancel').addEventListener('click', resetChalForm);
+  $('#aSetLoc').addEventListener('click', () => openLocPick(null, 'adminform'));
+  $('#aClrLoc').addEventListener('click', () => { adminPin = null; paintAdminPin(); });
+  $('#admPreview').addEventListener('click', () => setPreview(true));
+  $('#pvExit').addEventListener('click', () => setPreview(false));
+
+  /* ---- where is this challenge? ---- */
+  $('#lpCancel').addEventListener('click', () => { $('#locPick').hidden = true; locPickFor = null; });
+  $('#lpSave').addEventListener('click', saveLocPick);
+  $('#lpClear').addEventListener('click', clearLoc);
+  $('#lpExisting').addEventListener('click', e => {
+    const d = e.target.closest('[data-pick]');
+    if (d) pickExisting(d.dataset.pick);
+  });
+  $('#locPick').addEventListener('click', e => {
+    if (e.target.id === 'locPick'){ $('#locPick').hidden = true; locPickFor = null; }
+  });
 
   $('#admList').addEventListener('click', async e => {
     const t = e.target;
-    const go = t.closest('[data-lgo]'), ed = t.closest('[data-ledit]'), dl = t.closest('[data-ldel]');
-    const ca = t.closest('[data-cadd]'), ce = t.closest('[data-cedit]'), cd = t.closest('[data-cdel]');
+    const go = t.closest('[data-lgo]'), dl = t.closest('[data-ldel]');
+    const ce = t.closest('[data-cedit]'), cd = t.closest('[data-cdel]');
     if (go){
       const l = locById(go.dataset.lgo);
       if (l){ $('#admin').hidden = true; map.setView([l.lat,l.lng], 16);
               const mk = locMarkers.get(l.id); if (mk) mk.openPopup(); }
       return;
     }
-    if (ed){ startEditLoc(ed.dataset.ledit); return; }
+
     if (dl){
       const l = locById(dl.dataset.ldel);
       const n = chalsAt(dl.dataset.ldel).length;
@@ -5296,8 +5848,7 @@ function wire(){
       } catch(err){ toast('Delete failed: ' + err.message, 'err'); }
       return;
     }
-    if (ca){ openChalEditor(ca.dataset.cadd, null); return; }
-    if (ce){ const c = chalById(ce.dataset.cedit); if (c) openChalEditor(c.locId, c); return; }
+    if (ce){ startEditChal(ce.dataset.cedit); return; }
     if (cd){
       const c = chalById(cd.dataset.cdel);
       if (!c) return;
@@ -5306,19 +5857,13 @@ function wire(){
         ok:'Delete', danger:true });
       if (!ok) return;
       try {
-        await apiJson(await API.send('/api/locations/' + encodeURIComponent(c.locId) +
-          '/challenges?cid=' + encodeURIComponent(c.id), 'DELETE'));
+        await apiJson(await API.send('/api/challenges?id=' + encodeURIComponent(c.id), 'DELETE'));
         await pull(true);
         toast('Challenge deleted', 'ok');
       } catch(err){ toast('Delete failed: ' + err.message, 'err'); }
     }
   });
 
-  $('#ceCancel').addEventListener('click', () => { $('#chEdit').hidden = true; editChal = null; });
-  $('#ceSave').addEventListener('click', saveChal);
-  $('#chEdit').addEventListener('click', e => {
-    if (e.target.id === 'chEdit'){ $('#chEdit').hidden = true; editChal = null; }
-  });
 
   $('#admWipe').addEventListener('click', async () => {
     const n = (T.locations || []).length;
@@ -5341,7 +5886,7 @@ function wire(){
   /* ---- global ---- */
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (!$('#chEdit').hidden){ $('#chEdit').hidden = true; editChal = null; return; }
+    if (!$('#locPick').hidden){ $('#locPick').hidden = true; locPickFor = null; return; }
     if (askEl && !askEl.hidden){ askEl.querySelector('#askNo').click(); return; }
     if (!$('#nav').hidden){ endNav(); return; }
     if (!$('#gearbox').hidden){ $('#gearbox').hidden = true; return; }
@@ -5370,6 +5915,7 @@ function wire(){
    ================================================================ */
 (async function boot(){
   loadLocal();
+  computeTileGeometry();           // must precede initMap: it sets maxZoom
   T = EMPTY;                       // render targets exist before any I/O
   initMap();
   wireSheet();

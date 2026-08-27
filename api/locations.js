@@ -64,7 +64,7 @@ function cleanChallenge(body, locId, prev) {
 /* Every field recorded against a challenge, so a delete leaves nothing
    behind for an offline replay to reattach to. */
 function chalFields(state, cid) {
-  const out = ['C:' + cid, 'S:' + cid];
+  const out = ['C:' + cid, 'S:' + cid, 'N:' + cid];
   for (const p of kv.PLAYERS) { out.push('I:' + cid + ':' + p); out.push('D:' + cid + ':' + p); }
   return out;
 }

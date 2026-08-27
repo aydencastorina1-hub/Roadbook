@@ -84,6 +84,14 @@ const PLACES = [
     await j('/api/locations?id=' + encodeURIComponent(l.id), 'DELETE');
     console.log('  wiped', l.name);
   }
+  /* Deleting a location cascades to the challenges pinned to it, but
+     challenges can now exist with no pin at all — those have to be
+     deleted directly or a "wipe" quietly leaves the board half full. */
+  const left = (await j('/api/team')).challenges;
+  for (const c of left) {
+    await j('/api/challenges?id=' + encodeURIComponent(c.id), 'DELETE');
+    console.log('  wiped challenge', c.name);
+  }
   await fetch(BASE + '/api/route', { method: 'DELETE', headers: H });
   if (WIPE_ONLY) { console.log('wiped only.'); return; }
 

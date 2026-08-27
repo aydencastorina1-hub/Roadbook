@@ -40,7 +40,7 @@ function rewrite(url) {
   let m = /^\/api\/locations\/([^/?]+)\/challenges(\?.*)?$/.exec(url);
   if (m) return '/api/locations?id=' + m[1] + '&sub=challenges' +
     (m[2] ? '&' + m[2].slice(1) : '');
-  m = /^\/api\/challenges\/([^/?]+)\/(checkin|complete|skip)(\?.*)?$/.exec(url);
+  m = /^\/api\/challenges\/([^/?]+)\/(checkin|complete|skip|locate|select)(\?.*)?$/.exec(url);
   if (m) return '/api/challenges?id=' + m[1] + '&action=' + m[2] +
     (m[3] ? '&' + m[3].slice(1) : '');
   return url;

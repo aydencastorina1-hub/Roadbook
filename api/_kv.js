@@ -19,7 +19,8 @@
      C:<chalId>         JSON  — a challenge (carries locId)
      I:<chalId>:<name>  "<at>|<0|1>"          — a player's check-in
      D:<chalId>:<name>  "<at>|<0|1>"          — a player's part marked done
-     S:<chalId>         "<at>|<0|1>|<name>"   — the stop was skipped
+     S:<chalId>         "<at>|<0|1>|<name>"   — the stop was skipped mid-run
+     N:<chalId>         "<at>|<0|1>|<name>"   — the team decided not to do it
 
    WHY CHECK-INS ARE ONE FIELD PER (CHALLENGE, PLAYER) rather than a list
    on the challenge: two players checking into the same challenge write
@@ -107,6 +108,7 @@ async function readState() {
   const checkins = {};
   const done = {};
   const skips = {};
+  const notSel = {};
 
   for (const field of Object.keys(raw)) {
     const v = raw[field];
@@ -131,6 +133,9 @@ async function readState() {
     } else if (kind === 'S') {
       const f = parseFlag(v);
       if (f.on) skips[rest] = { by: f.extra, at: f.at };
+    } else if (kind === 'N') {
+      const f = parseFlag(v);
+      if (f.on) notSel[rest] = { by: f.extra, at: f.at };
     }
   }
 
@@ -142,7 +147,7 @@ async function readState() {
 
   return {
     event: Object.assign({}, DEFAULT_EVENT, jparse(raw.event, null) || {}),
-    locations, challenges, checkins, done, skips,
+    locations, challenges, checkins, done, skips, notSel,
     route: jparse(raw.route, null),
     players: PLAYERS,
     at: Date.now()        // server clock, so a phone with a wrong clock still
