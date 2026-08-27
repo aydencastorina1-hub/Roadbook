@@ -5,7 +5,7 @@
 
    THE WHOLE HUNT LIVES IN ONE REDIS HASH: `rb:v1:team`.
 
-   That is a deliberate shape, not laziness. Six phones poll this every
+   That is a deliberate shape, not laziness. Seven phones poll this every
    15 seconds for five hours; if the read fanned out over a handful of
    keys, every poll would cost a handful of commands against a shared
    Upstash store. One HGETALL is ONE command, so a whole hunt costs
@@ -66,8 +66,10 @@ async function cmd(args) {
 
 /* ------------------------------------------------------------ players */
 /* The roster is fixed and lives on the server too: a check-in is only
-   ever attributed to one of these six, whatever a client sends. */
-const PLAYERS = ['Will', 'Nicole', 'Lucas', 'Marchesa', 'Daniel', 'Kenzy'];
+   ever attributed to one of these, whatever a client sends. Keep it in
+   step with PLAYERS in index.html — "people needed" is clamped to this
+   length, so adding someone widens the challenge form automatically. */
+const PLAYERS = ['Will', 'Nicole', 'Lucas', 'Marchesa', 'Daniel', 'Kenzy', 'Cris'];
 const isPlayer = n => PLAYERS.indexOf(n) >= 0;
 
 /* ------------------------------------------------------------- read */

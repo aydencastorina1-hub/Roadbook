@@ -1261,6 +1261,9 @@ textarea{min-height:84px;resize:vertical;font-size:14px;line-height:1.45}
   font-size:14px;letter-spacing:0}
 .whobtn:active{transform:scale(.97);border-color:var(--amber)}
 .whobtn.cur{border-color:var(--amber);background:rgba(255,181,36,.1)}
+/* An odd roster leaves one tile stranded in the left column; let the
+   last one span the row so the grid closes off cleanly at 7 names. */
+#who .wgrid > .whobtn:last-child:nth-child(odd){grid-column:1 / -1}
 #who .wfoot{margin:28px auto 0;text-align:center;max-width:440px;width:100%}
 #who .wlink{background:none;border:0;color:var(--muted);font-size:11px;letter-spacing:1.6px;
   text-transform:uppercase;text-decoration:underline;text-underline-offset:4px;min-height:var(--tap);
@@ -1514,10 +1517,12 @@ textarea{min-height:84px;resize:vertical;font-size:14px;line-height:1.45}
 @media (min-width:880px){
   #admin .abody,#sum .sbody{max-width:820px;margin:0 auto;width:100%}
   #who .wgrid{grid-template-columns:repeat(3,1fr)}
+  #who .wgrid > .whobtn:last-child:nth-child(odd){grid-column:auto}
   #nav .nvmain{max-width:620px;margin:0 auto;width:100%}
 }
 @media (max-width:359px){
   #who .wgrid{grid-template-columns:1fr}
+  #who .wgrid > .whobtn:last-child:nth-child(odd){grid-column:auto}
   .whobtn{min-height:62px;flex-direction:row;gap:11px}
 }
 </style>
@@ -1792,11 +1797,9 @@ textarea{min-height:84px;resize:vertical;font-size:14px;line-height:1.45}
       <label class="f"><span>Points</span>
         <input type="number" id="cePts" value="10" min="0" step="1" inputmode="numeric" enterkeyhint="next"></label>
       <label class="f"><span>People needed</span>
-        <select id="ceNeed">
-          <option value="1">1 person</option><option value="2">2 people</option>
-          <option value="3">3 people</option><option value="4">4 people</option>
-          <option value="5">5 people</option><option value="6">6 — everyone</option>
-        </select></label>
+        <!-- filled from PLAYERS at boot, so the roster is the only
+             place a new name has to be added -->
+        <select id="ceNeed"></select></label>
     </div>
     <label class="f"><span>Description</span>
       <textarea id="ceDesc" placeholder="What actually has to happen, and what counts as proof"></textarea></label>
@@ -1932,7 +1935,7 @@ textarea{min-height:84px;resize:vertical;font-size:14px;line-height:1.45}
    private data at all except which name this phone is acting as. The
    locations, the challenges, who has checked into what, what is done,
    what was skipped and the route itself all live in Vercel KV and are
-   the same for all six players.
+   the same for everyone on the roster.
 
    That inverts the data flow. Nothing renders from local state any
    more; everything renders from T, the last known shared state, with
@@ -1992,8 +1995,10 @@ function fetchT(url, ms, opts){
 
 /* --------------------------------------------------------- the roster --
    Fixed, and checked on the server too. A check-in is only ever
-   attributed to one of these six. */
-const PLAYERS = ['Will','Nicole','Lucas','Marchesa','Daniel','Kenzy'];
+   attributed to one of these. Adding someone means adding them here AND
+   in api/_kv.js; the picker, the "people needed" choices and the
+   per-player summary are all derived from this array. */
+const PLAYERS = ['Will','Nicole','Lucas','Marchesa','Daniel','Kenzy','Cris'];
 const initials = n => String(n||'').slice(0,2).toUpperCase();
 
 /* --------------------------------------------------------- the rules --
@@ -2275,7 +2280,7 @@ async function persistQueue(){ await idbPut('sync', 'queue', Q); }
 
 /* Roll a fresh server state in. Also seeds the leg cache from the
    shared route: one phone's OSRM call becomes every phone's, which
-   matters when five of the six are in a dead zone. */
+   matters when most of the team is in a dead zone. */
 function adoptState(s){
   if (!s || !Array.isArray(s.locations)) return;
   RAW = s;
@@ -2604,13 +2609,38 @@ function applyDark(){
 }
 
 /* ------------------------------------------------------------ geocoding */
+/* Nominatim, with a lat,lng escape hatch. Two failure modes matter and
+   they need different advice, because one of them is temporary and the
+   other is not:
+
+     no signal      -> the fetch rejects
+     rate-limited   -> HTTP 200 (or 403) with the body "Access denied.
+                       See .../policies/nominatim/" — NOT JSON
+
+   OSM's public geocoder blocks bulk use, and the whole app is one page
+   with no server of its own to proxy through, so a blocked search is a
+   real state a user can land in. Either way the answer is the same
+   button (drop a pin on the map), but saying "no signal" to someone
+   with four bars is the kind of wrong that makes people stop trusting
+   the rest of the screen. */
 async function geocode(q){
   const raw = /^\s*(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/.exec(q);
   if (raw) return [{ lat:+raw[1], lng:+raw[2], label:(+raw[1]).toFixed(5)+', '+(+raw[2]).toFixed(5) }];
   const base = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=us&q=';
-  let r = await fetchT(base + encodeURIComponent(q) + '&viewbox=' + VIEWBOX + '&bounded=1', 12000);
-  let j = await r.json();
-  if (!j.length) { r = await fetchT(base + encodeURIComponent(q + ', New York'), 12000); j = await r.json(); }
+  const ask = async url => {
+    const r = await fetchT(url, 12000);
+    const txt = await r.text();
+    let j = null;
+    try { j = JSON.parse(txt); } catch(e){}
+    if (!Array.isArray(j)){
+      const err = new Error('geocoder unavailable');
+      err.blocked = true;                 // not a connectivity problem
+      throw err;
+    }
+    return j;
+  };
+  let j = await ask(base + encodeURIComponent(q) + '&viewbox=' + VIEWBOX + '&bounded=1');
+  if (!j.length) j = await ask(base + encodeURIComponent(q + ', New York'));
   return j.map(o => ({ lat:+o.lat, lng:+o.lon, label:o.display_name }));
 }
 function shortLabel(l){
@@ -4620,7 +4650,21 @@ function startEditLoc(id){
   $('#lCancel').hidden = false;
   $('#lName').scrollIntoView({ behavior:'smooth', block:'center' });
 }
+/* The "people needed" choices are the roster, so a new name never needs
+   a matching <option> added by hand. */
+function fillNeedOptions(){
+  const sel = $('#ceNeed');
+  if (sel.options.length === PLAYERS.length) return;
+  sel.innerHTML = PLAYERS.map((_, i) => {
+    const n = i + 1;
+    const label = n === 1 ? '1 person'
+      : n === PLAYERS.length ? n + ' — everyone'
+      : n + ' people';
+    return '<option value="' + n + '">' + label + '</option>';
+  }).join('');
+}
 function openChalEditor(locId, chal){
+  fillNeedOptions();
   editChal = { locId, chal: chal || null };
   const loc = locById(locId);
   $('#ceTitle').textContent = chal ? 'Edit challenge' : 'New challenge';
@@ -4787,7 +4831,11 @@ function wireSearch(which, inpSel, goSel, pinSel, meSel, resSel){
         esc(shortLabel(r.label.split(',').slice(1).join(','))) + '</div>').join('');
       box._res = res;
     } catch(e){
-      box.innerHTML = '<div>No signal for address lookup — tap the map to drop the pin instead.</div>';
+      box.innerHTML = e && e.blocked
+        ? '<div>Address search is refusing requests right now (OpenStreetMap rate-limits it). ' +
+          'Use <b>Map pin</b> instead — or paste <b>lat, lng</b> in the box above.</div>'
+        : '<div>No signal for address lookup — use <b>Map pin</b> instead, ' +
+          'or paste <b>lat, lng</b> in the box above.</div>';
     }
   };
   $(goSel).addEventListener('click', run);
@@ -5008,8 +5056,16 @@ function wire(){
     if (e.key === 'Enter'){ e.preventDefault(); tryAdmin($('#admCode').value.trim()); }
   });
 
-  ['#eDate','#eStart','#eEnd'].forEach(sel => $(sel).addEventListener('change', () => {
-    saveEvent({ date: $('#eDate').value, startTime: $('#eStart').value, endTime: $('#eEnd').value });
+  /* One field per save, NOT all three. Sending the whole trio means the
+     values sitting in the DOM overwrite whatever the server has — so an
+     admin nudging the finish time on one phone would silently push that
+     phone's stale date and start time over a change made on another.
+     The API treats a missing field as "leave it alone". */
+  const evField = { '#eDate':'date', '#eStart':'startTime', '#eEnd':'endTime' };
+  Object.keys(evField).forEach(sel => $(sel).addEventListener('change', () => {
+    const patch = {};
+    patch[evField[sel]] = $(sel).value;
+    saveEvent(patch);
   }));
   $('#eSat').addEventListener('click', () => {
     $('#eDate').value = nextSaturday(); $('#eStart').value = '19:00'; $('#eEnd').value = '00:00';

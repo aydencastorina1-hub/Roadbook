@@ -1,6 +1,7 @@
 'use strict';
-/* Player actions on a challenge. No admin code required — any of the six
-   can do any of these, to any challenge. That is the point of the app.
+/* Player actions on a challenge. No admin code required — anyone on the
+   roster can do any of these, to any challenge. That is the point of
+   the app.
 
      POST /api/challenges/:id/checkin    { player, on, at }
      POST /api/challenges/:id/complete   { player, on, at }

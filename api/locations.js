@@ -20,9 +20,11 @@
 
 const kv = require('./_kv');
 
-/* Locations carry a point; challenges do not. "people needed" is 1..6,
-   the size of the whole team — see the spec: it replaced the old
-   individual/group flag and the per-challenge minute estimate. */
+/* Locations carry a point; challenges do not. "people needed" runs from
+   1 to the size of the whole team — it replaced the old individual/group
+   flag and the per-challenge minute estimate. Clamped against
+   kv.PLAYERS.length so adding someone to the roster is a one-line change
+   in api/_kv.js and nothing here goes stale. */
 function cleanLocation(body, prev) {
   const lat = kv.num(body.lat, prev ? prev.lat : NaN);
   const lng = kv.num(body.lng, prev ? prev.lng : NaN);
@@ -45,7 +47,7 @@ function cleanChallenge(body, locId, prev) {
   if (!name) return null;
   let need = Math.round(kv.num(body.need, prev ? prev.need : 1));
   if (!isFinite(need)) need = 1;
-  need = Math.max(1, Math.min(6, need));          // 1..6 — the whole roster
+  need = Math.max(1, Math.min(kv.PLAYERS.length, need));   // 1..the whole roster
   let pts = Math.round(kv.num(body.pts, prev ? prev.pts : 10));
   if (!isFinite(pts)) pts = 0;
   pts = Math.max(0, Math.min(9999, pts));
