@@ -1,0 +1,6 @@
+# Keep line endings stable across machines. sw.js is stamped with a hash
+# of index.html at deploy time, so a CRLF round-trip would silently
+# change the build id (and therefore ship a "new version") without a
+# single line of the app having changed.
+* text=auto eol=lf
+*.png binary

@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Roadbook — Team Scavenger Hunt",
+  "short_name": "Roadbook",
+  "description": "One shared roadbook for the whole team: check into challenges, confirm the crew, optimise one route with the drive home, and keep the map and clock alive with no signal.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#07080a",
+  "theme_color": "#0a0a0b",
+  "categories": ["navigation", "travel", "utilities"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
