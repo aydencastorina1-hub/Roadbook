@@ -39,7 +39,7 @@
           Nominatim address search, and live sync with the other cars
    ----------------------------------------------------------------------- */
 
-const BUILD = 'e3dec80494d6';
+const BUILD = '463bf7bb1508';
 
 const SHELL_CACHE = 'roadbook-shell-' + BUILD;
 const TILE_CACHE  = 'roadbook-tiles-v1';   // deliberately NOT build-stamped:

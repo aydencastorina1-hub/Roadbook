@@ -1181,6 +1181,101 @@ textarea{min-height:84px;resize:vertical;font-size:14px;line-height:1.45}
 .prog{height:5px;background:#0b0e11;border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
 .prog>i{display:block;height:100%;background:var(--amber);width:0;transition:width .2s}
 
+/* ================================================================
+   PRESS FEEDBACK + SELECTED STATE
+
+   Two separate problems, both of which made the app feel dead to the
+   touch:
+
+   1. THE FILTER BUTTONS HAD NO SELECTED STYLE AT ALL. All / Needs
+      people / Mine were given an `.on` class by the code and there was
+      no CSS to match it, so the one you had chosen looked exactly like
+      the two you had not.
+
+   2. `-webkit-tap-highlight-color: transparent` at the top of this
+      sheet kills the grey flash iOS draws on a tap. That is the right
+      call — the default flash is an ugly rounded rectangle that ignores
+      the element's own shape — but nothing replaced it, so a tap showed
+      almost nothing.
+
+   `.tapped` is added by a pointerdown listener and removed ~220ms
+   later, rather than relying on `:active` alone. A quick tap holds
+   `:active` for a couple of frames at most, which is genuinely hard to
+   see on a phone in a moving car; a fixed 220ms flash always registers.
+   `:active` is kept alongside it so a press-and-hold stays lit.
+   ================================================================ */
+
+/* --- selected: the filter bar --- */
+.listbar button.on{
+  color:var(--amber);border-color:var(--amber-d);background:var(--amber-g);
+  box-shadow:inset 0 0 0 1px rgba(255,181,36,.25)}
+
+/* --- pressed --- */
+.btn:active,.btn.tapped{
+  transform:translateY(1px);
+  background:var(--line);border-color:var(--amber-d);color:#ffe3a3;
+  box-shadow:inset 0 0 0 1px rgba(255,181,36,.3),0 0 14px rgba(255,181,36,.16)}
+.btn.pri:active,.btn.pri.tapped{
+  background:#ffd06b;border-color:#fff1cf;color:#1a1204;
+  box-shadow:0 0 20px rgba(255,181,36,.55)}
+.btn.danger:active,.btn.danger.tapped{
+  background:rgba(255,74,56,.16);border-color:var(--red);color:#ffb3aa;
+  box-shadow:inset 0 0 0 1px rgba(255,74,56,.4),0 0 14px rgba(255,74,56,.2)}
+.btn.join:active,.btn.join.tapped{
+  background:rgba(65,201,232,.3);border-color:var(--cyan);color:#d6f6ff;
+  box-shadow:0 0 16px rgba(65,201,232,.4)}
+
+.listbar button:active,.listbar button.tapped,
+.minibtn:active,.minibtn.tapped,
+.navbtn:active,.navbtn.tapped,
+.skipbtn:active,.skipbtn.tapped{
+  transform:translateY(1px);
+  background:var(--amber-g);border-color:var(--amber-d);color:var(--amber);
+  box-shadow:0 0 12px rgba(255,181,36,.22)}
+.minibtn.danger:active,.minibtn.danger.tapped,
+.skipbtn:active,.skipbtn.tapped{
+  background:rgba(255,74,56,.14);border-color:var(--red);color:#ffb3aa;
+  box-shadow:0 0 12px rgba(255,74,56,.22)}
+
+.iconbtn:active,.iconbtn.tapped,
+.spkbtn:active,.spkbtn.tapped{
+  background:var(--amber-g);border-color:var(--amber);color:var(--amber);
+  box-shadow:0 0 14px rgba(255,181,36,.3)}
+
+.fab:active,.fab.tapped{
+  transform:scale(.92);border-color:var(--cyan);color:var(--cyan);
+  box-shadow:0 0 20px rgba(65,201,232,.45)}
+.fab.on:active,.fab.on.tapped{background:#8ee6ff}
+
+#tabbar button:active,#tabbar button.tapped{
+  background:rgba(255,181,36,.12);color:var(--amber)}
+
+.chip.tap:active,.chip.tap.tapped{
+  border-color:var(--amber);color:var(--amber);background:rgba(255,181,36,.16)}
+
+.whobtn:active,.whobtn.tapped{
+  transform:scale(.96);border-color:var(--amber);background:rgba(255,181,36,.14);
+  box-shadow:0 0 26px rgba(255,181,36,.28)}
+.whobtn:active .ini,.whobtn.tapped .ini{background:var(--amber);color:#1a1204}
+
+/* the checklist tick target is a whole 58px column, so it has to react */
+.ckrow .box:active,.ckrow .box.tapped{background:var(--amber-g)}
+.ckrow .box:active i,.ckrow .box.tapped i{border-color:var(--amber);color:var(--amber)}
+.ckrow.done .box:active i,.ckrow.done .box.tapped i{background:#5fe6a6;border-color:#5fe6a6}
+
+/* tapping a challenge card flies the map to it — say so */
+.chc.tapped{border-color:var(--amber-d);background:rgba(255,181,36,.06)}
+.rbrow.tapped{background:rgba(255,181,36,.1)}
+.srlist div:active,.srlist div.tapped{background:var(--panel3);color:var(--txt)}
+.lcard>.lh.tapped{background:#1a2026}
+
+/* Reduced-motion users still get the colour change, just no movement. */
+@media (prefers-reduced-motion:reduce){
+  .btn:active,.btn.tapped,.listbar button:active,.listbar button.tapped,
+  .minibtn:active,.minibtn.tapped,.fab:active,.fab.tapped,
+  .whobtn:active,.whobtn.tapped{transform:none}
+}
+
 /* ---------- phone (the default) ---------- */
 @media (max-width:879px){
   #sheet.hidden{height:0;border-top:0}
@@ -4912,6 +5007,26 @@ function wireSearch(which, inpSel, goSel, pinSel, meSel, resSel){
 }
 
 const openGear = () => { $('#gearbox').hidden = false; estimateCache(); paintMe(); renderChips(); };
+/* Press feedback. One delegated listener rather than a class on every
+   handler: buttons are re-rendered constantly (innerHTML), so anything
+   bound per element would have to be re-bound on every render.
+
+   The empty touchstart listener is the long-standing Safari shim: iOS
+   only applies :active to non-anchor elements when a touch listener
+   exists on the element or an ancestor. `.tapped` covers the common
+   case on its own, but a press-and-hold should stay lit too. */
+function initPressFeedback(){
+  const SEL = 'button:not([disabled]), .chip.tap, .whobtn, .ckrow .box, ' +
+              '.chc[data-cid], .rbrow[data-loc], .srlist div[data-i], .lcard > .lh';
+  document.addEventListener('pointerdown', e => {
+    const el = e.target.closest(SEL);
+    if (!el) return;
+    el.classList.add('tapped');
+    setTimeout(() => el.classList.remove('tapped'), 220);
+  }, true);
+  document.addEventListener('touchstart', () => {}, { passive: true });
+}
+
 function wire(){
   /* ---- who ---- */
   $('#whoGrid').addEventListener('click', e => {
@@ -5298,6 +5413,7 @@ function wire(){
   goTab('chal');
   if (!isDesktop()) setSheet('peek');
 
+  initPressFeedback();
   initGeoPerm();
   initPwa();
   tickClock();
